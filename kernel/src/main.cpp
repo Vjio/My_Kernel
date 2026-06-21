@@ -1,6 +1,10 @@
 #include <cstdint>
 #include <cstddef>
+#include <cstdarg>
 #include <limine.h>
+#include "flanterm/flanterm.h"
+#include "flanterm/flanterm_backends/fb.h"
+#include "stdio.hpp"
 
 // Set the base revision to 6, this is recommended as this is the latest
 // base revision described by the Limine boot protocol specification.
@@ -73,6 +77,9 @@ extern "C" {
 extern void (*__init_array[])();
 extern void (*__init_array_end[])();
 
+// global declaration for flanterm pointer
+struct flanterm_context *ft_ctx = nullptr;
+
 // The following will be our kernel's entry point.
 // If renaming kmain() to something else, make sure to change the
 // linker script accordingly.
@@ -98,14 +105,42 @@ extern "C" void kmain() {
 
     // Print a nice pattern to screen as an example.
     // Note: we assume the framebuffer model is RGB with 32-bit pixels.
-    volatile std::uint32_t *fb_ptr = static_cast<volatile std::uint32_t *>(framebuffer->address);
-    for (std::size_t y = 0; y < framebuffer->height; y++) {
-        for (std::size_t x = 0; x < framebuffer->width; x++) {
-            std::uint32_t nX = x * 255 / framebuffer->width;
-            std::uint32_t nY = y * 255 / framebuffer->height;
-            fb_ptr[y * (framebuffer->pitch / 4) + x] = (nY << 8) | nX;
-        }
-    }
+    // volatile std::uint32_t *fb_ptr = static_cast<volatile std::uint32_t *>(framebuffer->address);
+    // for (std::size_t y = 0; y < framebuffer->height; y++) {
+    //     for (std::size_t x = 0; x < framebuffer->width; x++) {
+    //         std::uint32_t nX = x * 255 / framebuffer->width;
+    //         std::uint32_t nY = y * 255 / framebuffer->height;
+    //         fb_ptr[y * (framebuffer->pitch / 4) + x] = (nY << 8) | nX;
+    //     }
+    // }
+
+    // for now, i will use flanterm to emulate the terminal
+    // i don't particularly wish to have to deal with every pixel in the framebuffer
+    ft_ctx = flanterm_fb_init(
+        nullptr, // malloc func (defaults to a safe internal allocator if null)
+        nullptr, // free func
+        static_cast<std::uint32_t *>(framebuffer->address),
+        framebuffer->width,
+        framebuffer->height,
+        framebuffer->pitch,
+        framebuffer->red_mask_size,
+        framebuffer->red_mask_shift,
+        framebuffer->green_mask_size,
+        framebuffer->green_mask_shift,
+        framebuffer->blue_mask_size,
+        framebuffer->blue_mask_shift,
+        nullptr, nullptr, // default canvas colors
+        nullptr, nullptr, // default text colors
+        nullptr, nullptr, // default ansi colors
+        nullptr, // default font
+        nullptr, // default font bold
+        NULL,    // default font spacing
+        0, 0, 1, // antialiasing/metrics
+        0, 0,    // margins
+        0        // fallback
+    );
+
+    printf("Hello world!\n");
 
     // We're done, just hang...
     hcf();
