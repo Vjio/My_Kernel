@@ -5,6 +5,7 @@
 #include "flanterm/flanterm.h"
 #include "flanterm/flanterm_backends/fb.h"
 #include "stdio.hpp"
+#include "gdt.hpp"
 
 // Set the base revision to 6, this is recommended as this is the latest
 // base revision described by the Limine boot protocol specification.
@@ -139,6 +140,8 @@ extern "C" void kmain() {
         0, 0,    // margins
         0        // fallback
     );
+
+    handle_gdt();
 
     printf("Hello world!\n");
 
