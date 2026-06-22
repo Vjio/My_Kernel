@@ -16,4 +16,4 @@ struct gdt_ptr {
 } __attribute__((packed));
 
 // inits gdt table and loads it
-void handle_gdt();
+void setup_gdt();

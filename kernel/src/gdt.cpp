@@ -1,5 +1,6 @@
 #include "gdt.hpp"
 #include <cstdint>
+
 // create gdt table of 3 entries (NULL, kernel code, kernel data)
 struct gdt_entry gdt[3];
 struct gdt_ptr gdtr;
@@ -16,7 +17,7 @@ static void gdt_set_gate(int num, uint8_t access, uint8_t gran) {
 
 extern "C" void load_gdt(uint64_t pointer_address);
 
-void handle_gdt() {
+void setup_gdt() {
     // NULL entry
     gdt_set_gate(0, 0, 0);
 

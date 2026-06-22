@@ -6,6 +6,7 @@
 #include "flanterm/flanterm_backends/fb.h"
 #include "stdio.hpp"
 #include "gdt.hpp"
+#include "idt.hpp"
 
 // Set the base revision to 6, this is recommended as this is the latest
 // base revision described by the Limine boot protocol specification.
@@ -141,7 +142,11 @@ extern "C" void kmain() {
         0        // fallback
     );
 
-    handle_gdt();
+    setup_gdt();
+    setup_idt();
+
+    // test to see if interupt 0 is triggered
+    volatile int z = 1 / 0;
 
     printf("Hello world!\n");
 
