@@ -7,6 +7,7 @@
 #include "stdio.hpp"
 #include "gdt.hpp"
 #include "idt.hpp"
+#include "tss.hpp"
 
 // Set the base revision to 6, this is recommended as this is the latest
 // base revision described by the Limine boot protocol specification.
@@ -82,6 +83,14 @@ extern void (*__init_array_end[])();
 // global declaration for flanterm pointer
 struct flanterm_context *ft_ctx = nullptr;
 
+extern "C" void load_tss();
+
+void trigger_stack_overflow() {
+    volatile int garbage[100];
+    trigger_stack_overflow();
+    garbage[0] = 1;
+}
+
 // The following will be our kernel's entry point.
 // If renaming kmain() to something else, make sure to change the
 // linker script accordingly.
@@ -142,11 +151,18 @@ extern "C" void kmain() {
         0        // fallback
     );
 
+    tss_init();
     setup_gdt();
+    load_tss();
     setup_idt();
 
-    // test to see if interupt 0 is triggered
-    volatile int z = 1 / 0;
+    // test for dividing by 0
+    // volatile int a = 1;
+    // volative int b = 0;
+    // volatile inc c = a / b;
+
+    // uncomment this for fun
+    // trigger_stack_overflow();
 
     printf("Hello world!\n");
 

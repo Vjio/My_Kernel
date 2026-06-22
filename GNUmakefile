@@ -32,6 +32,7 @@ run-hdd: run-hdd-$(ARCH)
 run-x86_64: edk2-ovmf-bins $(IMAGE_NAME).iso
 	qemu-system-$(ARCH) \
 		-M q35 \
+		-serial file:serial.log \
 		-drive if=pflash,unit=0,format=raw,file=edk2-ovmf-bins/ovmf-code-$(ARCH).fd,readonly=on \
 		-cdrom $(IMAGE_NAME).iso \
 		$(QEMUFLAGS)

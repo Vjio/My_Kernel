@@ -47,8 +47,41 @@ static const char* exception_names[32] = {
     "Reserved",                     // 31
 };
 
+#define COM1_PORT 0x3F8
+
+static inline void outb(uint16_t port, uint8_t data) {
+    __asm__ volatile ("outb %0, %1" : : "a"(data), "Nd"(port));
+}
+static void serial_print(const char* s) {
+    while (*s) {
+        outb(COM1_PORT, *s++);
+    }
+}
+
+static void serial_print_hex(uint64_t val) {
+    const char* hex = "0123456789ABCDEF";
+    for (int i = 60; i >= 0; i -= 4) {
+        outb(COM1_PORT, hex[(val >> i) & 0xF]);
+    }
+}
+
 extern "C" void exception_handler(interrupt_frame* frame) {
-    printf("EXCEPTION %s!\n", exception_names[frame->error_code]);
+    // some exceptions are so nasty we can't rely on printf to work
+    // so we have to log exceptions this way
+    if (frame->int_no == 8) {
+        serial_print("EXCEPTION: ");
+        serial_print(exception_names[frame->int_no]);
+        serial_print("\nRIP: ");
+        serial_print_hex(frame->rip);
+        serial_print("\nRSP: ");
+        serial_print_hex(frame->rsp);
+        serial_print("\nERR: ");
+        serial_print_hex(frame->error_code);
+        serial_print("\n");
+        for (;;) __asm__ volatile ("hlt");
+    }
+
+    printf("EXCEPTION %s!\n", exception_names[frame->int_no]);
 
     // can add more printfs here in the future if needed
     printf("RIP         %lu\n", frame->rip);
@@ -65,12 +98,12 @@ static struct idt_entry idt[256];
 static struct idtr idtr_reg;
 
 // helper function to cut up address
-static void idt_set_descriptor(uint8_t vector, void* isr, uint8_t flags) {
+static void idt_set_descriptor(uint8_t vector, void* isr, uint8_t flags, uint8_t ist) {
     uint64_t descriptor = reinterpret_cast<uint64_t>(isr);
 
     idt[vector].isr_low    = descriptor & 0xFFFF;
     idt[vector].kernel_cs  = 0x08;
-    idt[vector].ist        = 0;
+    idt[vector].ist        = ist;
     idt[vector].attributes = flags;
     idt[vector].isr_mid    = (descriptor >> 16) & 0xFFFF;
     idt[vector].isr_high   = (descriptor >> 32) & 0xFFFFFFFF;
@@ -82,9 +115,15 @@ void setup_idt() {
     idtr_reg.base  = reinterpret_cast<uint64_t>(&idt[0]);
 
     // populate the table
-    for (int i = 0; i < 32; i++)
+    for (int i = 0; i < 32; i++) {
+        uint8_t ist = 0;
+
+        // double fault gets it's own ist (in case the kernel runs into a stack overflow)
+        if (i == 8)
+            ist = 1;
         // 0x8E means: Present(1), Ring 0(00), 64-bit Interrupt Gate(01110)
-        idt_set_descriptor(i, isr_stub_table[i], 0x8E);
+        idt_set_descriptor(i, isr_stub_table[i], 0x8E, ist);
+    }
     
     // load the idt
     load_idt(reinterpret_cast<uint64_t>(&idtr_reg));
