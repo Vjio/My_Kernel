@@ -1,5 +1,7 @@
 global load_gdt
 
+section .text
+
 ; rdi holds &gdtr
 load_gdt:
     ; limine should have already disabled interrupts - just to be safe

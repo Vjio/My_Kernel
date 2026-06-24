@@ -8,6 +8,9 @@
 #include "gdt.hpp"
 #include "idt.hpp"
 #include "tss.hpp"
+#include "pic.hpp"
+#include "io.hpp"
+#include "acpi.hpp"
 
 // Set the base revision to 6, this is recommended as this is the latest
 // base revision described by the Limine boot protocol specification.
@@ -30,6 +33,21 @@ namespace {
 __attribute__((used, section(".limine_requests")))
 volatile limine_framebuffer_request framebuffer_request = {
     .id = LIMINE_FRAMEBUFFER_REQUEST_ID,
+    .revision = 0,
+    .response = nullptr
+};
+
+// root system description pointer
+__attribute__((used, section(".limine_requests")))
+volatile struct limine_rsdp_request rsdp_request = {
+    .id = LIMINE_RSDP_REQUEST_ID,
+    .revision = 0,
+    .response = nullptr
+};
+
+__attribute__((used, section(".limine_requests")))
+static volatile struct limine_hhdm_request hhdm_request = {
+    .id = LIMINE_HHDM_REQUEST_ID,
     .revision = 0,
     .response = nullptr
 };
@@ -105,14 +123,26 @@ extern "C" void kmain() {
         __init_array[i]();
     }
 
-    // Ensure we got a framebuffer.
+    // Ensure limine requests have been answered
     if (framebuffer_request.response == nullptr
      || framebuffer_request.response->framebuffer_count < 1) {
+        printf("Limine could not find the framebuffer!\n");
         hcf();
     }
 
-    // Fetch the first framebuffer.
+    if (rsdp_request.response == nullptr || rsdp_request.response->address == nullptr) {
+        printf("Limine could not find the ACPI RSDP!\n");
+        hcf(); 
+    }
+
+    if (hhdm_request.response == nullptr) {
+        printf("Limine HHDM response missing!\n");
+        hcf(); 
+    }
+
+    // fetch limine's responses
     limine_framebuffer *framebuffer = framebuffer_request.response->framebuffers[0];
+    struct RSDP2 *rsdp = reinterpret_cast<struct RSDP2 *>(rsdp_request.response->address);
 
     // Print a nice pattern to screen as an example.
     // Note: we assume the framebuffer model is RGB with 32-bit pixels.
@@ -155,6 +185,41 @@ extern "C" void kmain() {
     setup_gdt();
     load_tss();
     setup_idt();
+    PIC_disable();
+    printf("here!\n");
+
+    // IDT has been set up. legacy PIC is disabled. time to set up ACPI
+    if (!setup_acpi(rsdp, hhdm_request.response->offset)) {
+        printf("APIC setup failed!\n");
+        hcf();
+    }
+    
+    printf("there!\n");
+
+    // pointer to the start of the ACPI tables
+    void* rsdp_address = rsdp_request.response->address;
+    
+    printf("RSDP found at physical address: 0x%lx\n", (uint64_t)rsdp_address);
+
+    // move IRQs 0-15 to vectors 32-47 to avoid CPU exception collisions
+    PIC_remap(32, 40);
+
+    inb(0x60);
+
+    IRQ_clear_mask(0);
+
+    // unamsk keyboard interrupts
+    IRQ_clear_mask(1);
+
+    uint8_t mask = inb(0x21); 
+    printf("PIC1 Mask before sti: 0x%x\n", mask);
+
+    outb(0x20, 0x20); // Master PIC EOI
+    outb(0xA0, 0x20); // Slave PIC EOI
+
+    __asm__ volatile ("sti");
+    
+    printf("Kernel initialized. Enabling interrupts...\n");
 
     // test for dividing by 0
     // volatile int a = 1;

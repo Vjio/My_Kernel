@@ -1,6 +1,13 @@
 #pragma once
 #include <stdint.h>
 
+// you will see me use vector and int_no INTERCHANGEABLY
+// this is because os_dev's code snippets uses vector
+// but i found int_no to be more intuitive initially
+
+#define SOFTWARE_EXCEPTION_NR   32
+#define HARDWARE_EXCEPTION_NR   16
+
 struct idt_entry {
     // IDT -> interrrupt descritor table
     // ISR -> interrupt serive routine (the handler)
@@ -15,8 +22,8 @@ struct idt_entry {
 } __attribute__((packed));
 
 struct idtr {
-	uint16_t	limit;
-	uint64_t	base;
+    uint16_t	limit;
+    uint64_t	base;
 } __attribute__((packed));
 
 // i tried to model the x86 interrupt stack frame
@@ -48,6 +55,15 @@ extern "C" void isr_stub_24(); extern "C" void isr_stub_25();
 extern "C" void isr_stub_26(); extern "C" void isr_stub_27();
 extern "C" void isr_stub_28(); extern "C" void isr_stub_29();
 extern "C" void isr_stub_30(); extern "C" void isr_stub_31();
+
+extern "C" void irq_stub_0(); extern "C" void irq_stub_1();
+extern "C" void irq_stub_2(); extern "C" void irq_stub_3();
+extern "C" void irq_stub_4(); extern "C" void irq_stub_5();
+extern "C" void irq_stub_6(); extern "C" void irq_stub_7();
+extern "C" void irq_stub_8(); extern "C" void irq_stub_9();
+extern "C" void irq_stub_10(); extern "C" void irq_stub_11();
+extern "C" void irq_stub_12(); extern "C" void irq_stub_13();
+extern "C" void irq_stub_14(); extern "C" void irq_stub_15();
 
 extern "C" void load_idt(uint64_t ptr);
 

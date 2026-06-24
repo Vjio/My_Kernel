@@ -1,10 +1,12 @@
 #include "idt.hpp"
 #include "stdio.hpp"
+#include "pic.hpp"
+#include "io.hpp"
 
 // you will notice a lot of "manually" written large arrays of data.
 // there were smarter ways to do this. i just asked ai to generate them for me
 // since i will never have to change this code (thus it does not need to be scalable)
-static void* isr_stub_table[32] = {
+static void* isr_stub_table[SOFTWARE_EXCEPTION_NR] = {
     (void*)isr_stub_0,  (void*)isr_stub_1,  (void*)isr_stub_2,  (void*)isr_stub_3,
     (void*)isr_stub_4,  (void*)isr_stub_5,  (void*)isr_stub_6,  (void*)isr_stub_7,
     (void*)isr_stub_8,  (void*)isr_stub_9,  (void*)isr_stub_10, (void*)isr_stub_11,
@@ -15,8 +17,15 @@ static void* isr_stub_table[32] = {
     (void*)isr_stub_28, (void*)isr_stub_29, (void*)isr_stub_30, (void*)isr_stub_31,
 };
 
+static void* irq_stub_table[HARDWARE_EXCEPTION_NR] = {
+    (void*)irq_stub_0,  (void*)irq_stub_1,  (void*)irq_stub_2,  (void*)irq_stub_3,
+    (void*)irq_stub_4,  (void*)irq_stub_5,  (void*)irq_stub_6,  (void*)irq_stub_7,
+    (void*)irq_stub_8,  (void*)irq_stub_9,  (void*)irq_stub_10, (void*)irq_stub_11,
+    (void*)irq_stub_12, (void*)irq_stub_13, (void*)irq_stub_14, (void*)irq_stub_15,
+};
+
 // Exception name table for readable output
-static const char* exception_names[32] = {
+static const char* exception_names[SOFTWARE_EXCEPTION_NR] = {
     "Divide by Zero",               // 0
     "Debug",                        // 1
     "Non-Maskable Interrupt",       // 2
@@ -49,9 +58,6 @@ static const char* exception_names[32] = {
 
 #define COM1_PORT 0x3F8
 
-static inline void outb(uint16_t port, uint8_t data) {
-    __asm__ volatile ("outb %0, %1" : : "a"(data), "Nd"(port));
-}
 static void serial_print(const char* s) {
     while (*s) {
         outb(COM1_PORT, *s++);
@@ -84,14 +90,36 @@ extern "C" void exception_handler(interrupt_frame* frame) {
     printf("EXCEPTION %s!\n", exception_names[frame->int_no]);
 
     // can add more printfs here in the future if needed
-    printf("RIP         %lu\n", frame->rip);
+    printf("RIP         %lx\n", frame->rip);
     printf("CS          %lu\n", frame->cs);
     printf("RFLAGS      %lu\n", frame->rflags);
     printf("SS          %lu\n", frame->ss);
-    printf("RSP         %lu\n", frame->rsp);
+    printf("RSP         %lx\n", frame->rsp);
 
     // since this is a fatal exception, we don't need to return from it
     for (;;) __asm__ volatile ("hlt");
+}
+
+extern "C" void irq_handler(interrupt_frame* frame) {
+    // hardware interrupts are vectors 32-47 
+    // we subtract 32 to get the actual IRQ number (0-15)
+    int irq = frame->int_no - SOFTWARE_EXCEPTION_NR;
+
+    
+    serial_print("EXCEPTION: \n");
+    printf("HERE\n");
+
+    if (irq == 0) {
+        printf("timer tick\n");   // should spam immediately
+    }
+
+    if (irq == 1) {
+        uint8_t scancode = inb(0x60);   // MUST read this to deassert IRQ1
+        printf("Keyboard interrupt! scancode=0x%x\n", scancode);
+    }
+
+    // acknowledge the interrupt so the PIC knows it can send more
+    PIC_sendEOI(irq);
 }
 
 static struct idt_entry idt[256];
@@ -115,16 +143,18 @@ void setup_idt() {
     idtr_reg.base  = reinterpret_cast<uint64_t>(&idt[0]);
 
     // populate the table
-    for (int i = 0; i < 32; i++) {
-        uint8_t ist = 0;
-
+    for (int i = 0; i < SOFTWARE_EXCEPTION_NR; i++) {
         // double fault gets it's own ist (in case the kernel runs into a stack overflow)
-        if (i == 8)
-            ist = 1;
+        uint8_t ist = (i == 8) ? 1 : 0;
+
         // 0x8E means: Present(1), Ring 0(00), 64-bit Interrupt Gate(01110)
         idt_set_descriptor(i, isr_stub_table[i], 0x8E, ist);
     }
-    
+
+    for (int i = 0; i < HARDWARE_EXCEPTION_NR; i++) {
+        idt_set_descriptor(i + SOFTWARE_EXCEPTION_NR, irq_stub_table[i], 0x8E, 0); 
+    }
+
     // load the idt
     load_idt(reinterpret_cast<uint64_t>(&idtr_reg));
 }
