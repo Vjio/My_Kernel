@@ -4,7 +4,6 @@ global io_wait
 global cpu_get_msr
 global cpu_set_msr
 
-
 section .text
 
 ; uint8_t inb(uint16_t port)

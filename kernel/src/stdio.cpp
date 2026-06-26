@@ -3,6 +3,22 @@
 #include "flanterm/flanterm.h"
 #include "flanterm/flanterm_backends/fb.h"
 
+enum printf_state {
+    STATE_NORMAL,
+    STATE_LENGTH,
+    STATE_LENGTH_SHORT,
+    STATE_LENGTH_LONG,
+    STATE_SPEC
+};
+
+enum printf_length {
+    LENGTH_DEFAULT,
+    LENGTH_SHORT_SHORT,
+    LENGTH_SHORT,
+    LENGTH_LONG,
+    LENGTH_LONG_LONG
+};
+
 extern struct flanterm_context *ft_ctx;
 
 void putc(char c) {

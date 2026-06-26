@@ -110,7 +110,6 @@ bool setup_acpi(struct RSDP2 *rsdp, uint64_t hhdm_offset) {
         }
         record_ptr += header->length; // go to next record
     }
-    // ^ found IO APIC entry in MADT
 
     hardware_enable_lapic();
 
