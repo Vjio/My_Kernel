@@ -1,5 +1,5 @@
 #include "gdt.hpp"
-#include "tss.hpp"
+#include "interrupts/tss.hpp"
 #include <cstdint>
 
 // create gdt table of 5 entries (NULL, kernel code, kernel data, and the TSS split into 2)

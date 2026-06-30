@@ -1,6 +1,6 @@
 #include <cstdint>
 #include <cstddef>
-#include <memory.hpp>
+#include "memory.hpp"
 
 // GCC and Clang reserve the right to generate calls to the following
 // 4 C-linkage functions even if they are not directly called.

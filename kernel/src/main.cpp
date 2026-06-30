@@ -6,11 +6,11 @@
 #include "flanterm/flanterm_backends/fb.h"
 #include "stdio.hpp"
 #include "gdt.hpp"
-#include "idt.hpp"
-#include "tss.hpp"
-#include "pic.hpp"
+#include "interrupts/idt.hpp"
+#include "interrupts/tss.hpp"
+#include "interrupts/pic.hpp"
 #include "io.hpp"
-#include "acpi.hpp"
+#include "interrupts/acpi.hpp"
 
 // Set the base revision to 6, this is recommended as this is the latest
 // base revision described by the Limine boot protocol specification.
