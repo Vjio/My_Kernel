@@ -3,6 +3,20 @@
 #define FRAME_USED      1
 #define FRAME_UNUSED    0
 
+// bit = frame_index % 8
+// indes = frame_index / 8
+void PMM::set_bit(uint64_t frame_index) {
+    PMM::bitmap[frame_index / 8] |= (1 << (frame_index % 8));
+}
+
+void PMM::clear_bit(uint64_t frame_index) {
+    PMM::bitmap[frame_index / 8] &= ~(1 << (frame_index % 8));
+}
+
+bool PMM::test_bit(uint64_t frame_index) {
+    return PMM::bitmap[frame_index / 8] & (1 << (frame_index % 8));
+}
+
 void PMM::init_PMM(struct limine_memmap_response* memmap, uint64_t hhdm_offset) {
     uint64_t highest_address = 0;
     uint64_t bitmap_physical_base = 0;
@@ -53,12 +67,9 @@ void PMM::init_PMM(struct limine_memmap_response* memmap, uint64_t hhdm_offset) 
             for (uint64_t offset = 0; offset < memmap->entries[i]->length; offset += 4096) {
                 uint64_t physical_addr = memmap->entries[i]->base + offset;
                 uint64_t frame_index = physical_addr / 4096;
-                
-                uint8_t bit = frame_index % 8;
-                uint64_t index = frame_index / 8;
 
                 // set corresponding bit to 0
-                PMM::bitmap[index] &= ~(1 << bit);
+                PMM::clear_bit(frame_index);
                 PMM::free_frames++;
             }
         }
@@ -68,11 +79,8 @@ void PMM::init_PMM(struct limine_memmap_response* memmap, uint64_t hhdm_offset) 
     for (uint64_t offset = 0; offset < PMM::bit_map_size; offset += 4096) {
         uint64_t physical_addr = bitmap_physical_base + offset;
         uint64_t frame_index = physical_addr / 4096;
-        
-        uint8_t bit = frame_index % 8;
-        uint64_t index = frame_index / 8;
 
-        PMM::bitmap[index] |= (1 << bit);
+        PMM::set_bit(frame_index);
         PMM::free_frames--;
     }
 
@@ -94,12 +102,11 @@ paddr_t PMM::alloc_frame() {
     uint8_t bit = 0;
 
     for (uint8_t i = 0; i < 8; i++) {
-        uint8_t current_bit = PMM::bitmap[PMM::first_free_frame] & (1 << i);
-        if (current_bit == 0) {
+        uint64_t current_bit = (PMM::first_free_frame * 8) + i;
+        if (!PMM::test_bit(current_bit)) {
             bit = i;
-            // set bit to used
-            PMM::bitmap[PMM::first_free_frame] |= (1 << i);
-            PMM:;free_frames--;
+            PMM::set_bit(current_bit);
+            PMM::free_frames--;
             break;
         }
     }
@@ -136,22 +143,21 @@ paddr_t PMM::alloc_frame() {
 void PMM::free_frame(paddr_t frame) {
     uint64_t frame_index = frame / FRAME_SIZE;
     uint64_t index = frame_index / 8;
-    uint8_t bit = frame_index % 8;
 
-    // If the bit is already 0, the frame is already free
-    if ((PMM::bitmap[index] & (1 << bit)) == 0) {
+    // if the bit is already 0, the frame is already free
+    if (PMM::test_bit(frame_index) == 0) {
         // could add a log here for this
         // it shouldn't really happen
-        return; 
+        return;
     }
 
     // free the frame
-    PMM::bitmap[index] &= ~(1 << bit);
+    PMM::clear_bit(frame_index);
     PMM::free_frames++;
 
     // if we just freed a frame in a byte that is lower than our current starting search index,
     // move our starting search index back
     if (index < PMM::first_free_frame) {
-        PMM::first_free_frame = bit;
+        PMM::first_free_frame = index;
     }
 }

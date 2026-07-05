@@ -8,6 +8,7 @@
 
 typedef unsigned long paddr_t;
 
+// TODO: add synchronization primitives once multi thread support is implemented 
 class PMM {
 public:
     // could make this a singleton ig. for now this works
@@ -34,9 +35,9 @@ private:
     static uint64_t get_used_memory();
 
     // internal bitmap manipulation
-    static void set_bit(uint64_t index);
-    static void clear_bit(uint64_t index);
-    static bool test_bit(uint64_t index);
+    static void set_bit(uint64_t frame_index);
+    static void clear_bit(uint64_t frame_index);
+    static bool test_bit(uint64_t frame_index);
 
     // internal variables
     static uint8_t *bitmap;
