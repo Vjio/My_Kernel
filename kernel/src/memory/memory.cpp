@@ -13,21 +13,19 @@ void *memcpy(void *__restrict dest, const void *__restrict src, std::size_t n) {
     std::uint8_t *__restrict pdest = static_cast<std::uint8_t *__restrict>(dest);
     const std::uint8_t *__restrict psrc = static_cast<const std::uint8_t *__restrict>(src);
 
-    for (std::size_t i = 0; i < n; i++) {
+    for (std::size_t i = 0; i < n; i++)
         pdest[i] = psrc[i];
-    }
 
     return dest;
 }
 
-void *memset(void *s, int c, std::size_t n) {
-    std::uint8_t *p = static_cast<std::uint8_t *>(s);
+void *memset(void *src, int value, std::size_t n) {
+    std::uint8_t *p = static_cast<std::uint8_t *>(src);
 
-    for (std::size_t i = 0; i < n; i++) {
-        p[i] = static_cast<uint8_t>(c);
-    }
+    for (std::size_t i = 0; i < n; i++)
+        p[i] = static_cast<uint8_t>(value);
 
-    return s;
+    return src;
 }
 
 void *memmove(void *dest, const void *src, std::size_t n) {
