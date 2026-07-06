@@ -21,12 +21,12 @@ public:
     // allocates 1 frame
     static paddr_t alloc_frame();
     // allocates nr frames contiguously
-    static paddr_t alloc_frames(uint64_t nr);
+    // static paddr_t alloc_frames(uint64_t nr);
 
     // deallocates 1 frame
     static void free_frame(paddr_t address);
     // deallocates nr frames
-    static void free_frames(paddr_t address, uint64_t nr);
+    // static void free_frames(paddr_t address, uint64_t nr);
 
 private:
     // testing functions
@@ -40,16 +40,11 @@ private:
     static bool test_bit(uint64_t frame_index);
 
     // internal variables
-    static uint8_t *bitmap;
-    static uint64_t bit_map_size;
-    static uint64_t total_frames;
-    static uint64_t free_frames;
+    inline static uint8_t* bitmap           = nullptr;
+    inline static uint64_t bit_map_size     = 0;
+    inline static uint64_t total_frames     = 0;
+    inline static uint64_t free_frames      = 0;
     // index of the first byte with at least 1 free frame (at least 1 bit set to 0)
     // convention, if first_free_frame was set to a OXFF byte, that means there are no free frames
-    static uint64_t first_free_frame;
+    inline static uint64_t first_free_frame = 0;
 };
-
-
-
-
-

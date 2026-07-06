@@ -11,6 +11,7 @@
 #include "interrupts/pic.hpp"
 #include "io.hpp"
 #include "interrupts/acpi.hpp"
+#include "memory/pmm.hpp"
 
 // Set the base revision to 6, this is recommended as this is the latest
 // base revision described by the Limine boot protocol specification.
@@ -48,6 +49,13 @@ volatile struct limine_rsdp_request rsdp_request = {
 __attribute__((used, section(".limine_requests")))
 static volatile struct limine_hhdm_request hhdm_request = {
     .id = LIMINE_HHDM_REQUEST_ID,
+    .revision = 0,
+    .response = nullptr
+};
+
+__attribute__((used, section(".limine_requests")))
+volatile struct limine_memmap_request memmap_request = {
+    .id = LIMINE_MEMMAP_REQUEST_ID,
     .revision = 0,
     .response = nullptr
 };
@@ -140,6 +148,11 @@ extern "C" void kmain() {
         hcf(); 
     }
 
+    if (memmap_request.response == nullptr) {
+        printf("Limine memmap response missing!\n");
+        hcf(); 
+    }
+
     // fetch limine's responses
     limine_framebuffer *framebuffer = framebuffer_request.response->framebuffers[0];
     struct RSDP2 *rsdp = reinterpret_cast<struct RSDP2 *>(rsdp_request.response->address);
@@ -186,36 +199,15 @@ extern "C" void kmain() {
     load_tss();
     setup_idt();
     PIC_disable();
-    printf("here!\n");
 
-    // IDT has been set up. legacy PIC is disabled. time to set up ACPI
+    PMM::init_PMM(memmap_request.response, hhdm_request.response->offset);
+
     if (!setup_acpi(rsdp, hhdm_request.response->offset)) {
         printf("APIC setup failed!\n");
         hcf();
     }
-    
-    printf("there!\n");
-
-    // pointer to the start of the ACPI tables
-    void* rsdp_address = rsdp_request.response->address;
-    
-    printf("RSDP found at physical address: 0x%lx\n", (uint64_t)rsdp_address);
-
-    // move IRQs 0-15 to vectors 32-47 to avoid CPU exception collisions
-    PIC_remap(32, 40);
 
     inb(0x60);
-
-    IRQ_clear_mask(0);
-
-    // unamsk keyboard interrupts
-    IRQ_clear_mask(1);
-
-    uint8_t mask = inb(0x21); 
-    printf("PIC1 Mask before sti: 0x%x\n", mask);
-
-    outb(0x20, 0x20); // Master PIC EOI
-    outb(0xA0, 0x20); // Slave PIC EOI
 
     __asm__ volatile ("sti");
     

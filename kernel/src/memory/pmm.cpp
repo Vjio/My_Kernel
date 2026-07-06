@@ -4,7 +4,7 @@
 #define FRAME_UNUSED    0
 
 // bit = frame_index % 8
-// indes = frame_index / 8
+// index = frame_index / 8
 void PMM::set_bit(uint64_t frame_index) {
     PMM::bitmap[frame_index / 8] |= (1 << (frame_index % 8));
 }

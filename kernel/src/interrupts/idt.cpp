@@ -2,6 +2,7 @@
 #include "stdio.hpp"
 #include "pic.hpp"
 #include "io.hpp"
+#include "acpi.hpp"
 
 // you will notice a lot of "manually" written large arrays of data.
 // there were smarter ways to do this. i just asked ai to generate them for me
@@ -100,26 +101,15 @@ extern "C" void exception_handler(interrupt_frame* frame) {
     for (;;) __asm__ volatile ("hlt");
 }
 
-extern "C" void irq_handler(interrupt_frame* frame) {
-    // hardware interrupts are vectors 32-47 
-    // we subtract 32 to get the actual IRQ number (0-15)
+extern "C" void irq_handler(interrupt_frame *frame) {
     int irq = frame->int_no - SOFTWARE_EXCEPTION_NR;
 
-    
-    serial_print("EXCEPTION: \n");
-    printf("HERE\n");
-
-    if (irq == 0) {
-        printf("timer tick\n");   // should spam immediately
-    }
-
-    if (irq == 1) {
-        uint8_t scancode = inb(0x60);   // MUST read this to deassert IRQ1
+    if (irq == 1) { // Keyboard
+        uint8_t scancode = inb(0x60);
         printf("Keyboard interrupt! scancode=0x%x\n", scancode);
     }
 
-    // acknowledge the interrupt so the PIC knows it can send more
-    PIC_sendEOI(irq);
+    apic_send_eoi(); 
 }
 
 static struct idt_entry idt[256];

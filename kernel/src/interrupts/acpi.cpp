@@ -2,6 +2,9 @@
 #include "string.hpp"
 #include "stdio.hpp"
 #include "io.hpp"
+#include "../memory/vmm.hpp"
+
+volatile uint32_t *g_lapic_virt = 0;
 
 static void hardware_enable_lapic() {
     uint64_t apic_base_msr = cpu_get_msr(IA32_APIC_BASE_MSR);
@@ -26,7 +29,13 @@ bool acpi_validate_checksum(struct ACPISDTHeader* table_header) {
     return sum == 0;
 }
 
-static void lapic_write(uint32_t volatile *lapic_base, uint32_t reg_offset, uint32_t value) {
+void apic_send_eoi() {
+    if (g_lapic_virt) {
+        lapic_write(g_lapic_virt, 0xB0, 0); // 0xB0 is the EOI register
+    }
+}
+
+void lapic_write(uint32_t volatile *lapic_base, uint32_t reg_offset, uint32_t value) {
     lapic_base[reg_offset / 4] = value;
 }
 
@@ -43,7 +52,6 @@ static uint32_t cpu_read_IO_apic(volatile uint32_t* io_apic_base, uint32_t reg) 
    io_apic_base[0] = (reg & 0xff);
    return io_apic_base[4];
 }
-
 
 bool setup_acpi(struct RSDP2 *rsdp, uint64_t hhdm_offset) {
     // get XSDT from RSDP
@@ -110,30 +118,38 @@ bool setup_acpi(struct RSDP2 *rsdp, uint64_t hhdm_offset) {
         }
         record_ptr += header->length; // go to next record
     }
-
+    
     hardware_enable_lapic();
+    
+    volatile uint32_t* lapic_virt = reinterpret_cast<volatile uint32_t*>(madt->local_apic_address + hhdm_offset);
+    volatile uint32_t* io_apic_virt = reinterpret_cast<volatile uint32_t*>(io_apic_phys_addr + hhdm_offset);
+    g_lapic_virt = lapic_virt;
 
-    volatile uint32_t* lapic_base = reinterpret_cast<volatile uint32_t*>(madt->local_apic_address + hhdm_offset);
-    volatile uint32_t* io_apic_base = reinterpret_cast<volatile uint32_t*>(io_apic_phys_addr + hhdm_offset);
+    VMM::map_page(reinterpret_cast<uint64_t>(lapic_virt),
+        static_cast<uint64_t>(madt->local_apic_address),
+        PTE_PRESENT | PTE_READ_WRITE | PTE_CACHE_DISABLE, hhdm_offset);
+        
+    VMM::map_page(reinterpret_cast<uint64_t>(io_apic_virt), io_apic_phys_addr, 
+        PTE_PRESENT | PTE_READ_WRITE | PTE_CACHE_DISABLE, hhdm_offset);
 
-    printf("LAPIC Phys: 0x%x, Virt: 0x%lx\n", madt->local_apic_address, (uint64_t)lapic_base);
+    printf("LAPIC Phys: 0x%x, Virt: 0x%lx\n", madt->local_apic_address, (uint64_t)lapic_virt);
 
     // offset 0xF0 is the Spurious Interrupt Vector Register
-    uint32_t sivr = lapic_read(lapic_base, 0xF0);
-    sivr |= (1 << 8);     // Bit 8: APIC Software Enable
-    sivr |= 0xFF;         // Low 8 bits: Spurious Vector (Vector 255)
-    lapic_write(lapic_base, 0xF0, sivr);
+    uint32_t sivr = lapic_read(lapic_virt, 0xF0);
+    sivr |= (1 << 8);     // bit 8: APIC Software Enable
+    sivr |= 0xFF;         // low 8 bits: Spurious Vector (Vector 255)
+    lapic_write(lapic_virt, 0xF0, sivr);
 
     // program the Redirection Table Entry for the Keyboard
-    uint32_t target_vector = 33; // Vector 33 (IRQ 1 mapped to 32+1)
+    uint32_t target_vector = 33; // vector 33 (IRQ 1 mapped to 32+1)
     uint32_t low_index = 0x10 + (2 * keyboard_gsi);
     uint32_t high_index = low_index + 1;
 
-    // Write target destination (Core 0 APIC ID) to high 32 bits
-    cpu_write_IO_Apic(io_apic_base, high_index, 0 << 24);
+    // write target destination (Core 0 APIC ID) to high 32 bits
+    cpu_write_IO_Apic(io_apic_virt, high_index, 0 << 24);
 
-    // Write vector configuration and unmask to low 32 bits
-    cpu_write_IO_Apic(io_apic_base, low_index, target_vector);
+    // write vector configuration and unmask to low 32 bits
+    cpu_write_IO_Apic(io_apic_virt, low_index, target_vector);
 
     __asm__ volatile ("sti");
 
