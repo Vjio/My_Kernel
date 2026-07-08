@@ -1,44 +1,41 @@
-# Limine C++ Template
+# My_Kernel
 
-This repository will demonstrate how to set up a basic kernel in C++ using Limine.
+A hobby kernel written in C and C++, built on top of the [Limine](https://github.com/limine-bootloader/limine) bootloader. This project is a personal learning exercise in OS development, with the goal of learning more about low-level systems programming, memory management, paging, scheduling and more.
 
-## How to use this?
+## Building & Running
+
+The project uses `make` for building.
+
+```bash
+make all
+```
+
+This compiles the kernel and generates a bootable ISO image.
+
+Other useful targets:
+
+- `make run` — build the kernel/ISO and boot it in QEMU (if installed)
+- `make all-hdd` — build a raw HDD/USB image instead of an ISO
+- `make run-hdd` — build and run the HDD image in QEMU
 
 ### Dependencies
 
-Any `make` command depends on GNU make (`gmake`) and is expected to be run using it. This usually means using `make` on most GNU/Linux distros, or `gmake` on other non-GNU systems.
+- GNU Make
+- A Clang/LLVM (or GCC cross) toolchain capable of cross-compilation
+- `xorriso` for building ISO images
+- `sgdisk` and `mtools` for building HDD/USB images
+- `qemu` (optional, for the `run` targets)
 
-It is recommended to build this project using a standard UNIX-like system, using a Clang/LLVM toolchain capable of cross compilation.
+## Status
 
-Additionally, building an ISO with `make all` requires `xorriso`, and building a HDD/USB image with `make all-hdd` requires `sgdisk` (usually from `gdisk` or `gptfdisk` packages) and `mtools`.
+This is very much a work in progress, built for learning rather than use. Expect things to be incomplete, not fully bug free or rewritten without notice!
 
-### Toolchain selection
+## Acknowledgements
 
-The `TOOLCHAIN` and `TOOLCHAIN_PREFIX` `make` variables can be used to set the toolchain. `TOOLCHAIN` can be set to `llvm` to use Clang/LLVM.
+This project wouldn't be possible without the resources and tools below:
 
-For example:
-```
-make TOOLCHAIN=llvm
-```
-or:
-```
-make TOOLCHAIN_PREFIX=x86_64-elf-
-```
-
-### Architectural targets
-
-The `ARCH` make variable determines the target architecture to build the kernel and image for.
-
-The default `ARCH` is `x86_64`. Other options include: `aarch64`, `loongarch64`, and `riscv64`.
-
-### Makefile targets
-
-Running `make all` will compile the kernel (from the `kernel/` directory) and then generate a bootable ISO image.
-
-Running `make all-hdd` will compile the kernel and then generate a raw image suitable to be flashed onto a USB stick or hard drive/SSD.
-
-Running `make run` will build the kernel and a bootable ISO (equivalent to make all) and then run it using `qemu` (if installed).
-
-Running `make run-hdd` will build the kernel and a raw HDD image (equivalent to make all-hdd) and then run it using `qemu` (if installed).
-
-For x86_64, the `run-bios` and `run-hdd-bios` targets are equivalent to their non `-bios` counterparts except that they boot `qemu` using the default SeaBIOS firmware instead of OVMF.
+- [**Limine**](https://github.com/limine-bootloader/limine) by Mintsuki and contributors, for the bootloader and the C/C++ bare-bones template this kernel was built from.
+- [**Flanterm**](https://github.com/mintsuki/flanterm) by Mintsuki and contributors, for framebuffer terminal handling.
+- [**OSDev Wiki**](https://wiki.osdev.org/), an invaluable, condensed reference for just about every topic i needed for OS development.
+- **Operating Systems: Three Easy Pieces** (OSTEP) by Remzi and Andrea Arpaci-Dusseau, for clear, intuitive explanations of core OS concepts.
+- **Modern Operating Systems** by Andrew S. Tanenbaum, for deep, foundational coverage of operating system theory and design.
