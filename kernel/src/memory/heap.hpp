@@ -4,7 +4,7 @@
 
 #define USED        0
 #define FREE        1
-#define INIT_SIZE   8192
+#define INIT_SIZE   FRAME_SIZE * 2
 
 // TODO: later optimization, find a way to get rid of
 // the extra mem overhead
