@@ -12,6 +12,7 @@
 #include "io.hpp"
 #include "interrupts/acpi.hpp"
 #include "memory/pmm.hpp"
+#include "memory/heap.hpp"
 
 // Set the base revision to 6, this is recommended as this is the latest
 // base revision described by the Limine boot protocol specification.
@@ -201,6 +202,7 @@ extern "C" void kmain() {
     PIC_disable();
 
     PMM::init_PMM(memmap_request.response, hhdm_request.response->offset);
+    heap_init(hhdm_request.response->offset);
 
     if (!setup_acpi(rsdp, hhdm_request.response->offset)) {
         printf("APIC setup failed!\n");
