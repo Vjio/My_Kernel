@@ -29,7 +29,19 @@ struct idtr {
 // i tried to model the x86 interrupt stack frame
 // so as to have an easier time debuggind later.
 // if needed, this can be extended to hold some of the usual registers too
+struct exception_frame {
+    // pushed by the individual stubs
+    uint64_t int_no;
+    uint64_t error_code;
+
+    // pushed automatically by the CPU on interrupt
+    uint64_t rip, cs, rflags, rsp, ss;
+} __attribute__((packed));
+
 struct interrupt_frame {
+    // pushed in the common stub
+    uint64_t r15, r14, r13, r12, r11, r10, r9, r8;
+    uint64_t rbp, rdi, rsi, rdx, rcx, rbx, rax;
     // pushed by the individual stubs
     uint64_t int_no;
     uint64_t error_code;

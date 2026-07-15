@@ -124,8 +124,8 @@ irq_common_stub:
     push r14
     push r15
 
-    ; rsp + 120 so that rsp now point to the interrupt_frame struct
-    lea rdi, [rsp + 120]
+    ; pass every register to function as a struct on the stack
+    lea rdi, [rsp]
 
     call irq_handler
 

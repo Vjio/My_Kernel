@@ -4,7 +4,19 @@
 #include "io.hpp"
 #include "../memory/vmm.hpp"
 
+#define PIT_CMD_PORT  0x43
+#define PIT_CH0_PORT  0x40
+// register offsets
+#define APIC_REGISTER_LVT_TIMER         0x320
+#define APIC_REGISTER_TIMER_INITCNT     0x380
+#define APIC_REGISTER_TIMER_CURRCNT     0x390
+#define APIC_REGISTER_TIMER_DIV         0x3E0
+// bit flags
+#define APIC_LVT_INT_MASKED             0x10000
+#define APIC_LVT_TIMER_MODE_PERIODIC    0x20000
+
 volatile uint32_t *g_lapic_virt = 0;
+uint32_t g_apic_ticks_in_10ms = 0;
 
 static void hardware_enable_lapic() {
     uint64_t apic_base_msr = cpu_get_msr(IA32_APIC_BASE_MSR);
@@ -51,6 +63,56 @@ static void cpu_write_IO_Apic(volatile uint32_t* io_apic_base, uint32_t reg, uin
 static uint32_t cpu_read_IO_apic(volatile uint32_t* io_apic_base, uint32_t reg) {
    io_apic_base[0] = (reg & 0xff);
    return io_apic_base[4];
+}
+
+void pit_prepare_sleep(uint32_t microseconds) {
+    // 1.193182 MHz PIT clock
+    // divisor = (frequency * microseconds) / 1000000
+    uint32_t divisor = (119318 * microseconds) / 100000;
+
+    // access Lobyte/Hibyte, mode 0 (Interrupt on terminal count)
+    outb(PIT_CMD_PORT, 0x30);
+
+    // send low byte, then high byte
+    outb(PIT_CH0_PORT, divisor & 0xFF);
+    outb(PIT_CH0_PORT, (divisor >> 8) & 0xFF);
+}
+
+void pit_perform_sleep() {
+    uint8_t status = 0;
+    // poll the PIT until the output pin (Bit 7) goes high
+    do {
+        // read-back command, latch status of Channel 0
+        outb(PIT_CMD_PORT, 0xE2); 
+        status = inb(PIT_CH0_PORT);
+    } while ((status & 0x80) == 0); 
+}
+
+// https://wiki.osdev.org/APIC_Timer
+void apic_start_timer() {
+    // tell APIC timer to use divider 16
+    lapic_write(g_lapic_virt, APIC_REGISTER_TIMER_DIV, 0x3); 
+
+    // prepare the PIT to sleep for 10ms (10000µs)
+    pit_prepare_sleep(10000); 
+
+    // set APIC init counter to maximum (-1 or 0xFFFFFFFF)
+    lapic_write(g_lapic_virt, APIC_REGISTER_TIMER_INITCNT, 0xFFFFFFFF); 
+
+    // perform PIT-supported sleep (block until 10ms passes)
+    pit_perform_sleep(); 
+
+    // stop the APIC timer while we do math
+    lapic_write(g_lapic_virt, APIC_REGISTER_LVT_TIMER, APIC_LVT_INT_MASKED); 
+
+    // calculate how often the APIC timer ticked in 10ms
+    g_apic_ticks_in_10ms = 0xFFFFFFFF - lapic_read(g_lapic_virt, APIC_REGISTER_TIMER_CURRCNT); 
+    printf("APIC Calibrated: %u ticks per 10ms\n", g_apic_ticks_in_10ms);
+
+    // start timer as periodic on IRQ 32, divider 16, with our calculated ticks
+    lapic_write(g_lapic_virt, APIC_REGISTER_LVT_TIMER, 32 | APIC_LVT_TIMER_MODE_PERIODIC);
+    lapic_write(g_lapic_virt, APIC_REGISTER_TIMER_DIV, 0x3);
+    lapic_write(g_lapic_virt, APIC_REGISTER_TIMER_INITCNT, g_apic_ticks_in_10ms);
 }
 
 bool setup_acpi(struct RSDP2 *rsdp, uint64_t hhdm_offset) {
@@ -151,6 +213,7 @@ bool setup_acpi(struct RSDP2 *rsdp, uint64_t hhdm_offset) {
     // write vector configuration and unmask to low 32 bits
     cpu_write_IO_Apic(io_apic_virt, low_index, target_vector);
 
+    apic_start_timer();
     __asm__ volatile ("sti");
 
     return true;

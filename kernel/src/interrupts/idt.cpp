@@ -72,7 +72,7 @@ static void serial_print_hex(uint64_t val) {
     }
 }
 
-extern "C" void exception_handler(interrupt_frame* frame) {
+extern "C" void exception_handler(exception_frame* frame) {
     // some exceptions are so nasty we can't rely on printf to work
     // so we have to log exceptions this way
     if (frame->int_no == 8) {
