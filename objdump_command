@@ -1,1 +1,0 @@
-objdump -S -d kernel > kernel.asm

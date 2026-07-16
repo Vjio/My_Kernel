@@ -1,0 +1,1 @@
+objdump -S -d ./kernel/bin-x86_64/kernel > ./kernel/bin-x86_64/kernel.asm
