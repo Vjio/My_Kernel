@@ -13,6 +13,8 @@
 #include "interrupts/acpi.hpp"
 #include "memory/pmm.hpp"
 #include "memory/heap.hpp"
+#include "scheduling/scheduler.hpp"
+#include "operators.hpp"
 
 // Set the base revision to 6, this is recommended as this is the latest
 // base revision described by the Limine boot protocol specification.
@@ -224,6 +226,9 @@ extern "C" void kmain() {
     // trigger_stack_overflow();
 
     printf("Hello world!\n");
+
+    Scheduler *scheduler = new Scheduler();
+    g_schedulers[get_current_cpu_id()] = scheduler;
 
     // We're done, just hang...
     hcf();

@@ -71,3 +71,4 @@ bool acpi_validate_checksum(ACPISDTHeader* table_header);
 bool setup_acpi(struct RSDP2 *rsdp, uint64_t hhdm_offset);
 void lapic_write(uint32_t volatile *lapic_base, uint32_t reg_offset, uint32_t value);
 void apic_send_eoi();
+uint32_t get_current_cpu_id();

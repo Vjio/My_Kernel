@@ -55,6 +55,11 @@ static uint32_t lapic_read(uint32_t volatile *lapic_base, uint32_t reg_offset) {
     return lapic_base[reg_offset / 4];
 }
 
+uint32_t get_current_cpu_id() {
+    // LAPIC ID is in the top 8 bits of register 0x20
+    return lapic_read(g_lapic_virt, 0x20) >> 24;
+}
+
 static void cpu_write_IO_Apic(volatile uint32_t* io_apic_base, uint32_t reg, uint32_t value) {
    io_apic_base[0] = (reg & 0xff);
    io_apic_base[4] = value;

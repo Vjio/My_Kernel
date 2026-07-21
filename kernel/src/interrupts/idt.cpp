@@ -3,6 +3,7 @@
 #include "pic.hpp"
 #include "io.hpp"
 #include "acpi.hpp"
+#include "../scheduling/scheduler.hpp"
 
 // you will notice a lot of "manually" written large arrays of data.
 // there were smarter ways to do this. i just asked ai to generate them for me
@@ -103,6 +104,11 @@ extern "C" void exception_handler(exception_frame* frame) {
 
 extern "C" void irq_handler(interrupt_frame *frame) {
     int irq = frame->int_no - SOFTWARE_EXCEPTION_NR;
+
+    if (irq == 0) { // timer interrupt
+        printf("Timer interrupt!\n");
+        get_current_scheduler()->schedule(frame);
+    }
 
     if (irq == 1) { // Keyboard
         uint8_t scancode = inb(0x60);
