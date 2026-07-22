@@ -2,8 +2,16 @@
 #include "vmm.hpp"
 #include "memory.hpp"
 
+uint64_t l_hhdm_offset    = 0;
+uint64_t kernel_pml4_phys = 0;
+
 extern "C" uint64_t get_cr3();
 extern "C" void flush_tlb(uint64_t addr);
+
+void VMM::init(uint64_t hhdm_offset) {
+    l_hhdm_offset = hhdm_offset;
+    kernel_pml4_phys = get_cr3() & ~0xFFFull;
+}
 
 uint64_t *VMM::get_pml4(uint64_t hhdm_offset) {
     uint64_t cr3 = get_cr3();
@@ -53,4 +61,19 @@ void VMM::map_page(uint64_t *pml4, uint64_t virtual_addr, uint64_t physical_addr
 
     // flush TBL since we just invalidated whatever was at that address
     flush_tlb(virtual_addr);
+}
+
+uint64_t VMM::create_address_space() {
+    uint64_t new_pml4_phys = PMM::alloc_frame();
+    uint64_t *new_pml4_virt = reinterpret_cast<uint64_t *>(new_pml4_phys + l_hhdm_offset);
+    memset(new_pml4_virt, 0, FRAME_SIZE);
+
+    uint64_t *kernel_pml4_virt = reinterpret_cast<uint64_t *>(kernel_pml4_phys + l_hhdm_offset);
+
+    // indices 256-511 = higher half (kernel image + HHDM). every address space shares these
+    for (int i = 256; i < 512; i++)
+        new_pml4_virt[i] = kernel_pml4_virt[i];
+
+    // indices 0-255 (user half) are left zeroed; the process fills these in itself
+    return new_pml4_phys;
 }

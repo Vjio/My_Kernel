@@ -9,6 +9,9 @@
 #define NTH_INT 5
 #define BASE_INTERRUPT_NR   5
 
+extern "C" void load_cr3(uint64_t new_cr3);
+extern "C" uint64_t get_cr3();
+
 Scheduler *g_schedulers[MAX_CPUS] = { nullptr };
 
 Scheduler *get_current_scheduler() {
@@ -70,6 +73,9 @@ void Scheduler::every_tick(struct interrupt_frame *frame) {
         return;
 
     running_proccess = find_next_task();
+    uint64_t new_cr3 = reinterpret_cast<uint64_t>(running_proccess->root_page_table);
+    if (new_cr3 != get_cr3())
+        load_cr3(new_cr3);
     running_proccess->status = RUNNING;
     *frame = running_proccess->int_frame;
     free(temp);

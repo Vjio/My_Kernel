@@ -8,6 +8,7 @@
 // each CPU will eventually have their own scheduler
 // this is to avoid having costly locks on the internal process queues
 #define MAX_CPUS 4
+#define DEFAULT_LEVEL   7
 
 // singleton object that handles schedulling for a core
 class Scheduler {

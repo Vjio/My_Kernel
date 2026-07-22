@@ -12,6 +12,7 @@
 #include "io.hpp"
 #include "interrupts/acpi.hpp"
 #include "memory/pmm.hpp"
+#include "memory/vmm.hpp"
 #include "memory/heap.hpp"
 #include "scheduling/scheduler.hpp"
 #include "operators.hpp"
@@ -205,6 +206,7 @@ extern "C" void kmain() {
 
     PMM::init_PMM(memmap_request.response, hhdm_request.response->offset);
     heap_init(hhdm_request.response->offset);
+    VMM::init(hhdm_request.response->offset);
 
     if (!setup_acpi(rsdp, hhdm_request.response->offset)) {
         printf("APIC setup failed!\n");
