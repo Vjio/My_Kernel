@@ -1,5 +1,8 @@
 #pragma once
 #include "process.hpp"
+#include "../memory/heap.hpp"
+
+class Scheduler;
 
 class SchedulerQueue {
     public:
@@ -72,20 +75,7 @@ class SchedulerQueue {
 
     // DO NOT call this function outside of scheduler
     // promotes starving processes to the next queue
-    void promote_starving(Scheduler *scheduler, uint64_t interrupt_nr) {
-        struct process *temp = head;
-        while (temp != nullptr && temp->is_starving(interrupt_nr)) {
-            // update process
-            temp->ready_time = interrupt_nr;
-            temp->current_level++;
-            // insert in next queue
-            scheduler->insert_process(temp);
-
-            pop();
-            temp = head;
-        }    
-    
-    }
+    void promote_starving(Scheduler *scheduler, uint64_t interrupt_nr);
 
     private:
     struct process *head = nullptr;

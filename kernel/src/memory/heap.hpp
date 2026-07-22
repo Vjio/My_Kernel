@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <cstddef>
 
+#define FRAME_SIZE   4096
 #define USED        0
 #define FREE        1
 #define INIT_SIZE   FRAME_SIZE * 2
