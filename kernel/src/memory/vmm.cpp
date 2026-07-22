@@ -33,8 +33,10 @@ uint64_t *VMM::get_page_table_index(uint64_t* table, uint64_t index, uint64_t hh
     return reinterpret_cast<uint64_t *>(next_level_phys + hhdm_offset);
 }
 
-void VMM::map_page(uint64_t virtual_addr, uint64_t physical_addr, uint64_t flags, uint64_t hhdm_offset) {
-    uint64_t* pml4 = VMM::get_pml4(hhdm_offset);
+void VMM::map_page(uint64_t *pml4, uint64_t virtual_addr, uint64_t physical_addr,
+    uint64_t flags, uint64_t hhdm_offset) {
+    if (pml4 == nullptr)
+        pml4 = VMM::get_pml4(hhdm_offset);
 
     // extract each index (https://blog.xenoscr.net/resources/images/2021-09-06-Exploring-Virtual-Memory-and-Page-Structures/image-20210831220831378.png)
     uint64_t pml4_index = (virtual_addr >> 39) & 0x1FF;

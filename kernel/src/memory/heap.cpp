@@ -55,7 +55,7 @@ static void expand_heap(struct heap_node *last_node, size_t requested_size, bool
         + sizeof(struct heap_node) + last_node->size);
     for (int i = 0; i < pages_to_alloc; i++) {
         paddr_t phys_addr = PMM::alloc_frame();
-        VMM::map_page(heap_end + i * FRAME_SIZE, phys_addr,
+        VMM::map_page(nullptr, heap_end + i * FRAME_SIZE, phys_addr,
             PTE_PRESENT | PTE_READ_WRITE | PTE_CACHE_DISABLE, l_hhdm_offset);
     }
 

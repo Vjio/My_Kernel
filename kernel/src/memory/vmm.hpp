@@ -16,7 +16,9 @@ class VMM {
     // retrieve current active page table
     static uint64_t *get_pml4(uint64_t hhdm_offset);
     // maps a 4KB virtual page to a 4KB physical frame
-    static void map_page(uint64_t virtual_addr, uint64_t physical_addr, uint64_t flags, uint64_t hhdm_offset);
+    // set pml4 to null if you want the page to be mapped in process own page map
+    static void map_page(uint64_t *pml4, uint64_t virtual_addr, uint64_t physical_addr,
+        uint64_t flags, uint64_t hhdm_offset);
 
     private:
     // get value at table's index

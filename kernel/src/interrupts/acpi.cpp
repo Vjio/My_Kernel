@@ -192,11 +192,11 @@ bool setup_acpi(struct RSDP2 *rsdp, uint64_t hhdm_offset) {
     volatile uint32_t* io_apic_virt = reinterpret_cast<volatile uint32_t*>(io_apic_phys_addr + hhdm_offset);
     g_lapic_virt = lapic_virt;
 
-    VMM::map_page(reinterpret_cast<uint64_t>(lapic_virt),
+    VMM::map_page(nullptr, reinterpret_cast<uint64_t>(lapic_virt),
         static_cast<uint64_t>(madt->local_apic_address),
         PTE_PRESENT | PTE_READ_WRITE | PTE_CACHE_DISABLE, hhdm_offset);
         
-    VMM::map_page(reinterpret_cast<uint64_t>(io_apic_virt), io_apic_phys_addr, 
+    VMM::map_page(nullptr, reinterpret_cast<uint64_t>(io_apic_virt), io_apic_phys_addr, 
         PTE_PRESENT | PTE_READ_WRITE | PTE_CACHE_DISABLE, hhdm_offset);
 
     printf("LAPIC Phys: 0x%x, Virt: 0x%lx\n", madt->local_apic_address, (uint64_t)lapic_virt);
