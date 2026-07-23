@@ -1,5 +1,6 @@
 #include "scheduler.hpp"
 #include "../memory/heap.hpp"
+#include "../memory/vmm.hpp"
 
 #define MAX_DYNAMIC_LEVEL 7   // 8th queue — highest level reachable by promotion
 #define REALTIME_LOW  8       // 9th queue — fixed, never promotes/demotes
@@ -22,15 +23,15 @@ Scheduler::Scheduler() {
     Scheduler::interrupt_nr = 0;
 }
 
-void Scheduler::insert_process(struct process *process) {
-    queue[process->current_level].push(process);
+void Scheduler::insert_thread(struct thread *thread) {
+    queue[thread->current_level].push(thread);
 }
 
 void Scheduler::schedule(struct interrupt_frame *frame) {
-    if (running_proccess == nullptr)
+    if (running_thread == nullptr)
         return;
     // update current running task
-    running_proccess->int_frame = *frame;
+    running_thread->int_frame = *frame;
 
     // handle every tick logic
     every_tick(frame);
@@ -45,26 +46,26 @@ void Scheduler::schedule(struct interrupt_frame *frame) {
 
 void Scheduler::every_tick(struct interrupt_frame *frame) {
     bool must_switch = false;
-    struct process *temp = nullptr;
+    struct process *parent = nullptr;
 
-    if (running_proccess->status == DEAD) {
+    if (running_thread->status == DEAD) {
         must_switch = true;
-        temp = running_proccess;
+        parent = running_thread->parent;
 
-    } else if (running_proccess->status == WAITING) {
+    } else if (running_thread->status == WAITING) {
         must_switch = true;
         reinsert();
 
     } else if (should_preempt()) {
         must_switch = true;
-        running_proccess->status = READY;
+        running_thread->status = READY;
         reinsert();
 
     } else {
-        running_proccess->ttl--;
-        if (running_proccess->ttl <= 0) {
+        running_thread->ttl--;
+        if (running_thread->ttl <= 0) {
             must_switch = true;
-            running_proccess->status = READY;
+            running_thread->status = READY;
             reinsert();
         }
     }
@@ -72,13 +73,17 @@ void Scheduler::every_tick(struct interrupt_frame *frame) {
     if (!must_switch)
         return;
 
-    running_proccess = find_next_task();
-    uint64_t new_cr3 = reinterpret_cast<uint64_t>(running_proccess->root_page_table);
+    running_thread = find_next_task();
+    uint64_t new_cr3 = reinterpret_cast<uint64_t>(running_thread->parent->root_page_table);
     if (new_cr3 != get_cr3())
         load_cr3(new_cr3);
-    running_proccess->status = RUNNING;
-    *frame = running_proccess->int_frame;
-    free(temp);
+    running_thread->status = RUNNING;
+    *frame = running_thread->int_frame;
+
+    if (parent != nullptr) {
+        VMM::destroy_address_space(parent->root_page_table);
+        free(parent);
+    }
 }
 
 void Scheduler::every_n_tick() {
@@ -90,15 +95,14 @@ void Scheduler::every_n_tick() {
     }
 }
 
-struct process *Scheduler::check_high_prio() {
+struct thread *Scheduler::check_high_prio() {
     for (int i = 9; i >= 8; i--) {
         if (queue[i].empty())
             continue;
 
         queue[i].clean_up();
-
         
-        struct process *next_task = queue[i].extract_ready_process();
+        struct thread *next_task = queue[i].extract_ready_thread();
         next_task->status = RUNNING;
         next_task->ttl = BASE_INTERRUPT_NR;
         return next_task;
@@ -107,14 +111,14 @@ struct process *Scheduler::check_high_prio() {
     return nullptr;
 }
 
-struct process *Scheduler::find_next_task() {
+struct thread *Scheduler::find_next_task() {
     for (int i = 9; i >= 0; i--) {
         if (queue[i].empty())
             continue;
 
         queue[i].clean_up();
         
-        struct process *next_task = queue[i].extract_ready_process();
+        struct thread *next_task = queue[i].extract_ready_thread();
         next_task->status = RUNNING;
         next_task->ttl = BASE_INTERRUPT_NR;
         return next_task;
@@ -125,11 +129,11 @@ struct process *Scheduler::find_next_task() {
 
 bool Scheduler::should_preempt() {
     // check if process can even be preempted
-    if (running_proccess->current_level >= REALTIME_HIGH)
+    if (running_thread->current_level >= REALTIME_HIGH)
         return false;
 
     // only lvl 10 process can preempt a lvl 9
-    if (running_proccess->current_level == REALTIME_LOW)
+    if (running_thread->current_level == REALTIME_LOW)
         return !queue[REALTIME_HIGH].empty();
 
     return !queue[REALTIME_LOW].empty() || !queue[REALTIME_HIGH].empty();
@@ -137,25 +141,25 @@ bool Scheduler::should_preempt() {
 
 void Scheduler::reinsert() {
     // queues 9/10 are fixed, tasks there never promote or demote
-    if (running_proccess->base_level <= MAX_DYNAMIC_LEVEL) {
-        int used = BASE_INTERRUPT_NR - running_proccess->ttl;
+    if (running_thread->base_level <= MAX_DYNAMIC_LEVEL) {
+        int used = BASE_INTERRUPT_NR - running_thread->ttl;
 
-        if (running_proccess->ttl <= 0) {
+        if (running_thread->ttl <= 0) {
             // used its whole quantum -> demote
-            if (running_proccess->base_level > 0)
-                running_proccess->base_level--;
+            if (running_thread->base_level > 0)
+                running_thread->base_level--;
         } else if (used * 100 < PROMOTE_THRESHOLD_PCT * BASE_INTERRUPT_NR) {
             // gave up the CPU having used < 40% of its quantum -> promote
-            if (running_proccess->base_level < MAX_DYNAMIC_LEVEL)
-                running_proccess->base_level++;
+            if (running_thread->base_level < MAX_DYNAMIC_LEVEL)
+                running_thread->base_level++;
         }
         // else, used 40-99% of quantum -> no change
     }
 
     // a starving task's current_level was bumped without touching base_level;
     // now that it's done running, it drops back to its base level
-    running_proccess->current_level = running_proccess->base_level;
-    running_proccess->ready_time = interrupt_nr;
+    running_thread->current_level = running_thread->base_level;
+    running_thread->ready_time = interrupt_nr;
     
-    queue[running_proccess->base_level].push(running_proccess);
+    queue[running_thread->base_level].push(running_thread);
 }

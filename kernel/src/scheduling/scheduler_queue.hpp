@@ -14,7 +14,7 @@ class SchedulerQueue {
     } 
 
     // returns first element in queue
-    struct process *peek() {
+    struct thread *peek() {
         return head;
     }
 
@@ -28,7 +28,7 @@ class SchedulerQueue {
     }
 
     // adds an element to the end of the queue
-    void push(struct process *new_task) {
+    void push(struct thread *new_task) {
         if (tail)
             tail->next = new_task;
         else
@@ -36,24 +36,25 @@ class SchedulerQueue {
         tail = new_task;
     }
 
-    // removes any dead process from queue
+    // removes any dead threads from queue
     void clean_up() {
         if (head == nullptr)
             return;
         
-        struct process *temp;
+        struct thread *temp;
         while (head != nullptr && head->status == DEAD) {
             temp = peek();
+            free(temp->stack_base);
             free(temp);
             pop();
         }
     }
 
-    struct process *extract_ready_process() {
+    struct thread *extract_ready_thread() {
         if (head == nullptr)
             return head;
 
-        struct process *temp = head;
+        struct thread *temp = head;
         if (head->status == READY) {
             pop();
             return temp;
@@ -61,11 +62,11 @@ class SchedulerQueue {
         
         while (temp->next != nullptr) {
             if (temp->next->status == READY) {
-                struct process *next_process = temp->next;
-                temp->next = next_process->next;
-                if (next_process == tail)
+                struct thread *next_thread = temp->next;
+                temp->next = next_thread->next;
+                if (next_thread == tail)
                     tail = temp;
-                return next_process;
+                return next_thread;
             }
             temp = temp->next;
         }
@@ -78,7 +79,7 @@ class SchedulerQueue {
     void promote_starving(Scheduler *scheduler, uint64_t interrupt_nr);
 
     private:
-    struct process *head = nullptr;
-    struct process *tail = nullptr;
+    struct thread *head = nullptr;
+    struct thread *tail = nullptr;
 };
 

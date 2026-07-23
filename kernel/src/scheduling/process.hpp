@@ -13,22 +13,57 @@ typedef enum {
     DEAD
 } status_t;
 
-struct process {
+struct process;
+
+struct thread {
     struct interrupt_frame int_frame;
-    void* root_page_table;
-    struct process *next;
-    // last exact date the process became ready
-    // used to check if a process is starving
+    size_t tid;
+    status_t status;
+    char name[MAX_NAME_LEN];
+    // pointer to next thread inside scheduler queue
+    struct thread* next;
+    // pointer to next thread that belongs to this thread's process
+    struct thread* next_in_process;
+    // pointer to previous thread
+    struct thread* prev_in_process;
+    // process that this thread belongs to
+    struct process* parent;
+    // last exact date the thread became ready
+    // used to check if a thread is starving
     uint64_t ready_time;
-    size_t pid;
     int base_level;
     int current_level;
     // nr of timer interrupts left to do its work (quantum)
     int ttl;
-    status_t status;
-    char name[MAX_NAME_LEN];
+    void* stack_base;
 
     bool is_starving(uint64_t interrupt_nr) {
         return interrupt_nr - ready_time >= STARVING_TIME;
     }
+
+    void thread_exit();
 };
+
+struct process {
+    void* root_page_table;
+    struct thread* threads;
+    size_t pid;
+    char name[MAX_NAME_LEN];
+};
+
+inline void thread::thread_exit() {
+    if (prev_in_process != nullptr)
+        prev_in_process->next_in_process = next_in_process;
+    else
+        parent->threads = next_in_process;
+
+    if (next_in_process != nullptr)
+        next_in_process->prev_in_process = prev_in_process;
+
+    if (parent->threads == nullptr)
+        // process has no other threads to run, set it back to current thread
+        parent->threads = this;
+
+    status = DEAD;
+    while (true) {;}
+}
