@@ -21,9 +21,11 @@ class VMM {
         uint64_t flags, uint64_t hhdm_offset);
 
     static uint64_t create_address_space();
+    static void destroy_address_space(void* root_page_table);
 
     private:
     // get value at table's index
     // alocates a new frame for the index if needed
     static uint64_t *get_page_table_index(uint64_t* table, uint64_t index, uint64_t hhdm_offset);
+    static void free_table(uint64_t table_phys, int level);
 };

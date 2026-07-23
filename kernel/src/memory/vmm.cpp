@@ -73,7 +73,42 @@ uint64_t VMM::create_address_space() {
     // indices 256-511 = higher half (kernel image + HHDM). every address space shares these
     for (int i = 256; i < 512; i++)
         new_pml4_virt[i] = kernel_pml4_virt[i];
-
     // indices 0-255 (user half) are left zeroed; the process fills these in itself
+
     return new_pml4_phys;
 }
+
+void VMM::destroy_address_space(void *root_page_table) {
+    uint64_t pml4_phys = reinterpret_cast<uint64_t>(root_page_table);
+    uint64_t *pml4_virt = reinterpret_cast<uint64_t *>(pml4_phys + l_hhdm_offset);
+
+    for (int i = 0; i < 256; i++) {
+        if ((pml4_virt[i] & PTE_PRESENT) == 0)
+            continue;
+
+        uint64_t pdpt_phys = pml4_virt[i] & ~0xFFFull;
+        free_table(pdpt_phys, 2);
+    }
+    // indices 256-511 point at the shared kernel/HHDM tables. don't destroy them
+
+    PMM::free_frame(pml4_phys);
+}
+
+void VMM::free_table(uint64_t table_phys, int level) {
+    uint64_t *table_virt = reinterpret_cast<uint64_t *>(table_phys + l_hhdm_offset);
+
+    for (int i = 0; i < 512; i++) {
+        if ((table_virt[i] & PTE_PRESENT) == 0)
+            continue;
+
+        uint64_t next_phys = table_virt[i] & ~0xFFFull;
+        if (level > 0)
+            free_table(next_phys, level - 1);
+        else
+            // an actual data frame, not a table
+            PMM::free_frame(next_phys);
+    }
+
+    PMM::free_frame(table_phys);
+}
+
