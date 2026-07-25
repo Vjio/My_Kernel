@@ -7,8 +7,6 @@
 
 size_t next_free_pid = 0;
 
-struct process* create_process(char* name, void(*function)(void*), void* arg);
-
 struct thread* add_thread(struct process* proc, char* name, void(*function)(void*), void* arg) {
     if (proc == nullptr) {
         create_process(name, function, arg);

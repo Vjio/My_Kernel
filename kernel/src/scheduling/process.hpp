@@ -61,9 +61,13 @@ inline void thread::thread_exit() {
         next_in_process->prev_in_process = prev_in_process;
 
     if (parent->threads == nullptr)
-        // process has no other threads to run, set it back to current thread
+        // convetion, if process threads points to a dead thread
+        // process has no other threads to run and must be freed
         parent->threads = this;
 
     status = DEAD;
     while (true) {;}
 }
+
+struct thread* add_thread(struct process* proc, char* name, void(*function)(void*), void* arg);
+struct process* create_process(char* name, void(*function)(void*), void* arg);

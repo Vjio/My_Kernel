@@ -50,6 +50,7 @@ class SchedulerQueue {
         }
     }
 
+    // pops the first ready thread from a queue and returns it
     struct thread *extract_ready_thread() {
         if (head == nullptr)
             return head;

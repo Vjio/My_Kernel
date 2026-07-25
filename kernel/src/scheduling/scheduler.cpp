@@ -28,10 +28,9 @@ void Scheduler::insert_thread(struct thread *thread) {
 }
 
 void Scheduler::schedule(struct interrupt_frame *frame) {
-    if (running_thread == nullptr)
-        return;
     // update current running task
-    running_thread->int_frame = *frame;
+    if (running_thread != nullptr)
+        running_thread->int_frame = *frame;
 
     // handle every tick logic
     every_tick(frame);
@@ -45,44 +44,56 @@ void Scheduler::schedule(struct interrupt_frame *frame) {
 }
 
 void Scheduler::every_tick(struct interrupt_frame *frame) {
-    bool must_switch = false;
-    struct process *parent = nullptr;
+    struct thread *dead_thread = nullptr;
+    struct process *dead_process = nullptr;
 
-    if (running_thread->status == DEAD) {
-        must_switch = true;
-        parent = running_thread->parent;
+    if (running_thread != nullptr) {
+        bool must_switch = false;
+        if (running_thread->status == DEAD) {
+            must_switch = true;
+            dead_thread = running_thread;
+            // convetion, if process threads points to a dead thread
+            // process has no other threads to run and must be freed
+            dead_process = running_thread->parent;
 
-    } else if (running_thread->status == WAITING) {
-        must_switch = true;
-        reinsert();
+        } else if (running_thread->status == WAITING) {
+            must_switch = true;
+            reinsert();
 
-    } else if (should_preempt()) {
-        must_switch = true;
-        running_thread->status = READY;
-        reinsert();
-
-    } else {
-        running_thread->ttl--;
-        if (running_thread->ttl <= 0) {
+        } else if (should_preempt()) {
             must_switch = true;
             running_thread->status = READY;
             reinsert();
+
+        } else {
+            running_thread->ttl--;
+            if (running_thread->ttl <= 0) {
+                must_switch = true;
+                running_thread->status = READY;
+                reinsert();
+            }
         }
+
+        if (!must_switch)
+            return;
     }
 
-    if (!must_switch)
-        return;
-
     running_thread = find_next_task();
+    if (running_thread == nullptr)
+        running_thread = dummy;
+
     uint64_t new_cr3 = reinterpret_cast<uint64_t>(running_thread->parent->root_page_table);
     if (new_cr3 != get_cr3())
         load_cr3(new_cr3);
     running_thread->status = RUNNING;
     *frame = running_thread->int_frame;
 
-    if (parent != nullptr) {
-        VMM::destroy_address_space(parent->root_page_table);
-        free(parent);
+    if (dead_thread != nullptr)
+        free(dead_thread);
+
+    if (dead_process != nullptr) {
+        VMM::destroy_address_space(dead_process->root_page_table);
+        free(dead_process);
     }
 }
 
@@ -162,4 +173,11 @@ void Scheduler::reinsert() {
     running_thread->ready_time = interrupt_nr;
     
     queue[running_thread->base_level].push(running_thread);
+}
+
+// dummy function. only use if for spawning dummy process
+// so that the scheduler will always have at least 1 thread to run
+void dummy_work(void *) {
+    while (true)
+        asm("hlt");
 }

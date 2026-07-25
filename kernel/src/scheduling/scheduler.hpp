@@ -36,6 +36,9 @@ class Scheduler {
     void reinsert();
     // returns true if thread should be kicked off cpu
     bool should_preempt();
+
+    // dummy thread that is run when no other threads are ready
+    struct thread *dummy;
 };
 
 extern Scheduler *g_schedulers[MAX_CPUS];
