@@ -7,6 +7,8 @@
 
 size_t next_free_pid = 0;
 
+extern "C" uint64_t get_cr3();
+
 struct thread* add_thread(struct process* proc, char* name, void(*function)(void*), void* arg) {
     if (proc == nullptr) {
         create_process(name, function, arg);
@@ -39,7 +41,7 @@ struct thread* add_thread(struct process* proc, char* name, void(*function)(void
     proc->threads = thread;
 
     thread->next = nullptr;
-    g_schedulers[get_current_cpu_id()]->insert_thread(thread);
+    Scheduler::get_current_scheduler()->insert_thread(thread);
 
     return thread;
 }
@@ -55,6 +57,36 @@ struct process* create_process(char* name, void(*function)(void*), void* arg) {
     process->root_page_table = reinterpret_cast<void *>(pml4_phys);
 
     add_thread(process, name, function, arg);
+
+    return process;
+}
+
+static struct thread *make_current_execution_thread(char *name, struct process *parent) {
+    struct thread *thread = reinterpret_cast<struct thread*>(malloc(sizeof(struct thread)));
+
+    memcpy(thread->name, name, MAX_NAME_LEN);
+    thread->tid = next_free_pid++;
+    thread->status = RUNNING;
+    thread->base_level = REALTIME_HIGH;
+    thread->current_level = REALTIME_HIGH;
+    thread->parent = parent;
+    thread->next = nullptr;
+    thread->next_in_process = nullptr;
+    thread->prev_in_process = nullptr;
+    // int_frame deliberately left unset. schedule() populates it
+    // the first time this thread is preempted
+
+    return thread;
+}
+
+struct process *make_current_execution_process(char* name) {
+    struct process* process = reinterpret_cast<struct process*>(malloc(sizeof(struct process)));
+    
+    memcpy(process->name, name, MAX_NAME_LEN);
+    process->pid = next_free_pid++;
+
+    process->root_page_table = reinterpret_cast<void *>(get_cr3());
+    process->threads = make_current_execution_thread("kernel_thread", process);
 
     return process;
 }

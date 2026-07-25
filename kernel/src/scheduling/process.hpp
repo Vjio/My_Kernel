@@ -69,5 +69,11 @@ inline void thread::thread_exit() {
     while (true) {;}
 }
 
+// creates a thread and notifies the scheduler about it
+// set proc to nullptr if you want to make a new process for the thread
 struct thread* add_thread(struct process* proc, char* name, void(*function)(void*), void* arg);
+// creates a process with one thread. notifies the scheduler about the created thread
 struct process* create_process(char* name, void(*function)(void*), void* arg);
+// maps a process struct to the current running program
+// will only be used by the kernel to make itself known to the scheduler
+struct process *make_current_execution_process(char* name);

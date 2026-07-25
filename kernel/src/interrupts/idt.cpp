@@ -106,8 +106,7 @@ extern "C" void irq_handler(interrupt_frame *frame) {
     int irq = frame->int_no - SOFTWARE_EXCEPTION_NR;
 
     if (irq == 0) { // timer interrupt
-        printf("Timer interrupt!\n");
-        get_current_scheduler()->schedule(frame);
+        Scheduler::get_current_scheduler()->schedule(frame);
     }
 
     if (irq == 1) { // Keyboard

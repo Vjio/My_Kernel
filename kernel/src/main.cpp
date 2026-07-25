@@ -16,6 +16,7 @@
 #include "memory/heap.hpp"
 #include "scheduling/scheduler.hpp"
 #include "operators.hpp"
+#include "scheduling/process.hpp"
 
 // Set the base revision to 6, this is recommended as this is the latest
 // base revision described by the Limine boot protocol specification.
@@ -214,8 +215,6 @@ extern "C" void kmain() {
     }
 
     inb(0x60);
-
-    __asm__ volatile ("sti");
     
     printf("Kernel initialized. Enabling interrupts...\n");
 
@@ -227,10 +226,12 @@ extern "C" void kmain() {
     // uncomment this for fun
     // trigger_stack_overflow();
 
+    // inits scheduler
+    Scheduler::get_current_scheduler();
+
     printf("Hello world!\n");
 
-    Scheduler *scheduler = new Scheduler();
-    g_schedulers[get_current_cpu_id()] = scheduler;
+    __asm__ volatile ("sti");
 
     // We're done, just hang...
     hcf();

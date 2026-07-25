@@ -2,9 +2,6 @@
 #include "../memory/heap.hpp"
 #include "../memory/vmm.hpp"
 
-#define MAX_DYNAMIC_LEVEL 7   // 8th queue — highest level reachable by promotion
-#define REALTIME_LOW  8       // 9th queue — fixed, never promotes/demotes
-#define REALTIME_HIGH 9       // 10th queue — fixed, never promotes/demotes
 #define PROMOTE_THRESHOLD_PCT 40
 
 #define NTH_INT 5
@@ -12,15 +9,23 @@
 
 extern "C" void load_cr3(uint64_t new_cr3);
 extern "C" uint64_t get_cr3();
+void dummy_work(void *);
 
 Scheduler *g_schedulers[MAX_CPUS] = { nullptr };
 
-Scheduler *get_current_scheduler() {
-    return g_schedulers[get_current_cpu_id()];
+Scheduler::Scheduler(char *name) {
+    g_schedulers[get_current_cpu_id()] = this;
+    Scheduler::interrupt_nr = 0;
+    Scheduler::dummy = create_process("dummy", dummy_work, nullptr)->threads;
+    running_thread = make_current_execution_process(name)->threads;
 }
 
-Scheduler::Scheduler() {
-    Scheduler::interrupt_nr = 0;
+Scheduler *Scheduler::get_current_scheduler() {
+    if (g_schedulers[get_current_cpu_id()] != nullptr)
+        return g_schedulers[get_current_cpu_id()];
+    
+    g_schedulers[get_current_cpu_id()] = new Scheduler("kernel_process");
+    return g_schedulers[get_current_cpu_id()] ;
 }
 
 void Scheduler::insert_thread(struct thread *thread) {
@@ -175,7 +180,7 @@ void Scheduler::reinsert() {
     queue[running_thread->base_level].push(running_thread);
 }
 
-// dummy function. only use if for spawning dummy process
+// dummy function. only use for spawning dummy process
 // so that the scheduler will always have at least 1 thread to run
 void dummy_work(void *) {
     while (true)
