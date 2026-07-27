@@ -18,7 +18,8 @@ class Scheduler {
     public:
     void schedule(struct interrupt_frame *frame);
     void insert_thread(struct thread *thread);
-    
+    uint64_t get_interrupt_nr();
+
     // returns scheduler responsible for current cpu
     // makes a new scheduler object if one doesn't exist
     static Scheduler *get_current_scheduler();
@@ -29,6 +30,9 @@ class Scheduler {
     // current running thread on the CPU
     struct thread *running_thread = nullptr;
     SchedulerQueue queue[10];
+    // struct thread * list and not a scheduler queue because the scheduler
+    // will parse every element in the queue, not just the head of it
+    struct thread *sleep_list = nullptr;
 
     // function called every clock interrupt
     void every_tick(struct interrupt_frame *frame);
@@ -43,6 +47,10 @@ class Scheduler {
     void reinsert();
     // returns true if thread should be kicked off cpu
     bool should_preempt();
+    // pushed thread to front of sleep list
+    void add_to_sleep_list(struct thread *t);
+    // wakes up any expired sleeping threads and reinserts them
+    void wake_sleeping();
 
     // dummy thread that is run when no other threads are ready
     struct thread *dummy;

@@ -90,3 +90,15 @@ struct process *make_current_execution_process(char* name) {
 
     return process;
 }
+
+void thread::thread_sleep(uint64_t ticks) {
+    Scheduler *scheduler = Scheduler::get_current_scheduler();
+
+    wake_time = scheduler->get_interrupt_nr() + ticks;
+    status = SLEEPING;
+
+    // Block here until the scheduler wakes thread up
+    while (status != RUNNING) {
+        asm volatile("hlt");
+    }
+}

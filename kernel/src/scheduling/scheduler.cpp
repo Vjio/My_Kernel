@@ -48,11 +48,36 @@ void Scheduler::schedule(struct interrupt_frame *frame) {
     every_n_tick();
 }
 
+uint64_t Scheduler::get_interrupt_nr() {
+    return this->interrupt_nr;
+}
+
+void Scheduler::add_to_sleep_list(struct thread *thread) {
+    thread->next = sleep_list;
+    sleep_list = thread;
+}
+
+void Scheduler::wake_sleeping() {
+    struct thread **cur = &sleep_list;
+
+    while (*cur != nullptr) {
+        struct thread *thread = *cur;
+        if (thread->wake_time <= interrupt_nr) {
+            *cur = thread->next;
+            thread->status = READY;
+            thread->ready_time = interrupt_nr;
+            insert_thread(thread);
+        } else {
+            cur = &thread->next;
+        }
+    }
+}
+
 void Scheduler::every_tick(struct interrupt_frame *frame) {
     struct thread *dead_thread = nullptr;
     struct process *dead_process = nullptr;
 
-    if (running_thread != nullptr) {
+    if (running_thread != nullptr) [[likely]] {
         bool must_switch = false;
         if (running_thread->status == DEAD) {
             must_switch = true;
@@ -64,6 +89,10 @@ void Scheduler::every_tick(struct interrupt_frame *frame) {
         } else if (running_thread->status == WAITING) {
             must_switch = true;
             reinsert();
+
+        } else if (running_thread->status == SLEEPING) {
+            must_switch = true;
+            add_to_sleep_list(running_thread);
 
         } else if (should_preempt()) {
             must_switch = true;
@@ -109,6 +138,7 @@ void Scheduler::every_n_tick() {
 
         queue[i].promote_starving(this, interrupt_nr);
     }
+    wake_sleeping();
 }
 
 struct thread *Scheduler::check_high_prio() {

@@ -6,10 +6,12 @@
 #define MAX_NAME_LEN    32
 #define STACK_SIZE      FRAME_SIZE * 4
 
+// WAITING is currently unused
 typedef enum {
     READY,
     RUNNING,
     WAITING,
+    SLEEPING,
     DEAD
 } status_t;
 
@@ -31,6 +33,7 @@ struct thread {
     // last exact date the thread became ready
     // used to check if a thread is starving
     uint64_t ready_time;
+    uint64_t wake_time;
     int base_level;
     int current_level;
     // nr of timer interrupts left to do its work (quantum)
@@ -41,6 +44,7 @@ struct thread {
         return interrupt_nr - ready_time >= STARVING_TIME;
     }
 
+    void thread_sleep(uint64_t ticks);
     void thread_exit();
 };
 
