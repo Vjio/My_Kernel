@@ -30,6 +30,18 @@ Other useful targets:
 
 This is very much a work in progress, built for learning rather than use. Expect things to be incomplete, not fully bug free or rewritten without notice!
 
+Implemented so far:
+- core cpu setup (GDT, TSS, LAPIC)
+- interrupt handler (IDT, IRQ stubs)
+- PMM, VMM and bitmap heap
+- custom MLPQ scheduler (check src/scheduling/README.md for more information on it)
+- threads and processes 
+
+Working on:
+- userland
+- file system
+- elf loader
+
 ## Acknowledgements
 
 This project wouldn't be possible without the resources and tools below:
