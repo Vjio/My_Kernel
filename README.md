@@ -33,14 +33,15 @@ This is very much a work in progress, built for learning rather than use. Expect
 Implemented so far:
 - core cpu setup (GDT, TSS, LAPIC)
 - interrupt handler (IDT, IRQ stubs)
-- PMM, VMM and bitmap heap
+- PMM (bitmap), VMM and heap (linked list node allocator)
 - custom MLPQ scheduler (check src/scheduling/README.md for more information on it)
 - threads and processes 
 
 Working on:
-- userland
+- userland (syscalls)
 - file system
 - elf loader
+- cli
 
 ## Acknowledgements
 
@@ -48,6 +49,6 @@ This project wouldn't be possible without the resources and tools below:
 
 - [**Limine**](https://github.com/limine-bootloader/limine) by Mintsuki and contributors, for the bootloader and the C/C++ bare-bones template this kernel was built from.
 - [**Flanterm**](https://github.com/mintsuki/flanterm) by Mintsuki and contributors, for framebuffer terminal handling.
-- [**OSDev Wiki**](https://wiki.osdev.org/), an invaluable, condensed reference for just about every topic i needed for OS development.
+- [**OSDev Wiki**](https://wiki.osdev.org/), great condensed reference for just about every topic I needed for OS development.
 - **Operating Systems: Three Easy Pieces** (OSTEP) by Remzi and Andrea Arpaci-Dusseau, for clear, intuitive explanations of core OS concepts.
 - **Modern Operating Systems** by Andrew S. Tanenbaum, for deep, foundational coverage of operating system theory and design.
