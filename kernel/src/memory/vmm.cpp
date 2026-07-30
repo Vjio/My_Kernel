@@ -38,7 +38,7 @@ uint64_t *VMM::get_page_table_index(uint64_t* table, uint64_t index, uint64_t hh
         // set page table to 0
         memset(new_table_virt, 0, FRAME_SIZE);
 
-        table[index] = new_table_phys | PTE_PRESENT | PTE_READ_WRITE;
+        table[index] = new_table_phys | PTE_PRESENT | PTE_READ_WRITE | PTE_USER;
     }
     // ret the virtual address of the next level
     uint64_t next_level_phys = table[index] & ~0xFFFull;

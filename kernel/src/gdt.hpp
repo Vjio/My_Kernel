@@ -3,8 +3,8 @@
 
 #define GDT_KERNEL_CODE (0x08 | 0)
 #define GDT_KERNEL_DATA (0x10 | 0)
-#define GDT_USER_DATA   (0x28 | 3)
-#define GDT_USER_CODE   (0x30 | 3)
+#define GDT_USER_CODE   (0x28 | 3)
+#define GDT_USER_DATA   (0x30 | 3)
 
 struct gdt_entry {
     uint16_t limit_low;     // Lower 16 bits of the limit

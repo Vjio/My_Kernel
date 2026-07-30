@@ -112,10 +112,11 @@ struct thread *add_user_thread(struct process *proc, char *name, uint64_t entry_
 
     // map ring3 stack
     uint64_t hhdm = VMM::get_hhdm_offset();
+    uint64_t *pml4_virt = reinterpret_cast<uint64_t *>(
+        reinterpret_cast<uint64_t>(proc->root_page_table) + hhdm);
     for (uint64_t off = 0; off < STACK_SIZE; off += FRAME_SIZE) {
         uint64_t phys_addr = PMM::alloc_frame();
-        VMM::map_page(reinterpret_cast<uint64_t*>(proc->root_page_table),
-                      USER_STACK_TOP - STACK_SIZE + off, phys_addr,
+        VMM::map_page(pml4_virt, USER_STACK_TOP - STACK_SIZE + off, phys_addr,
                       PTE_PRESENT | PTE_READ_WRITE | PTE_USER, hhdm);
     }
     thread->stack_base = reinterpret_cast<void*>(USER_STACK_TOP - STACK_SIZE);

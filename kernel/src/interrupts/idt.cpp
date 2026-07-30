@@ -98,6 +98,7 @@ extern "C" void exception_handler(exception_frame* frame) {
     printf("RFLAGS      %lu\n", frame->rflags);
     printf("SS          %lu\n", frame->ss);
     printf("RSP         %lx\n", frame->rsp);
+    printf("ERR         %lx\n", frame->error_code);
 
     // since this is a fatal exception, we don't need to return from it
     for (;;) __asm__ volatile ("hlt");
