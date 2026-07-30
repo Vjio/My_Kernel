@@ -23,6 +23,10 @@ uint64_t *VMM::get_pml4(uint64_t hhdm_offset) {
     return reinterpret_cast<uint64_t *>(pml4_phys + hhdm_offset);
 }
 
+uint64_t VMM::get_hhdm_offset() {
+    return l_hhdm_offset;
+}
+
 uint64_t *VMM::get_page_table_index(uint64_t* table, uint64_t index, uint64_t hhdm_offset) {
     if ((table[index] & PTE_PRESENT) == 0) {
         // index hasn't been allocated. ask pmm for a new frame

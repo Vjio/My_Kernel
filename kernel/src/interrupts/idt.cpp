@@ -3,7 +3,8 @@
 #include "pic.hpp"
 #include "io.hpp"
 #include "acpi.hpp"
-#include "../scheduling/scheduler.hpp"
+#include "scheduling/scheduler.hpp"
+#include "gdt.hpp"
 
 // you will notice a lot of "manually" written large arrays of data.
 // there were smarter ways to do this. i just asked ai to generate them for me
@@ -125,7 +126,7 @@ static void idt_set_descriptor(uint8_t vector, void* isr, uint8_t flags, uint8_t
     uint64_t descriptor = reinterpret_cast<uint64_t>(isr);
 
     idt[vector].isr_low    = descriptor & 0xFFFF;
-    idt[vector].kernel_cs  = 0x08;
+    idt[vector].kernel_cs  = GDT_KERNEL_CODE;
     idt[vector].ist        = ist;
     idt[vector].attributes = flags;
     idt[vector].isr_mid    = (descriptor >> 16) & 0xFFFF;

@@ -22,6 +22,7 @@ class VMM {
 
     static uint64_t create_address_space();
     static void destroy_address_space(void* root_page_table);
+    static uint64_t get_hhdm_offset();
 
     private:
     // get value at table's index
