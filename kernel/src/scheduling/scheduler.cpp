@@ -1,6 +1,8 @@
 #include "scheduler.hpp"
-#include "../memory/heap.hpp"
-#include "../memory/vmm.hpp"
+#include "memory/heap.hpp"
+#include "memory/vmm.hpp"
+#include "gdt.hpp"
+#include "interrupts/tss.hpp"
 
 #define PROMOTE_THRESHOLD_PCT 40
 
@@ -11,12 +13,14 @@ extern "C" void load_cr3(uint64_t new_cr3);
 extern "C" uint64_t get_cr3();
 void dummy_work(void *);
 
+extern struct tss_entry tss;
+
 Scheduler *g_schedulers[MAX_CPUS] = { nullptr };
 
 Scheduler::Scheduler(char *name) {
     g_schedulers[get_current_cpu_id()] = this;
     Scheduler::interrupt_nr = 0;
-    Scheduler::dummy = create_process("dummy", dummy_work, nullptr)->threads;
+    Scheduler::dummy = create_kernel_process("dummy", dummy_work, nullptr)->threads;
     running_thread = make_current_execution_process(name)->threads;
 }
 
@@ -121,6 +125,12 @@ void Scheduler::every_tick(struct interrupt_frame *frame) {
         load_cr3(new_cr3);
     running_thread->status = RUNNING;
     *frame = running_thread->int_frame;
+
+    // point the TSS at this thread's kernel-mode landing stack so the
+    // next ring3->ring0 transition (timer, fault, syscall) has somewhere to push to
+    if (running_thread->kernel_stack != nullptr) {
+        tss.rsp[0] = reinterpret_cast<uint64_t>(running_thread->kernel_stack) + STACK_SIZE;
+    }
 
     if (dead_thread != nullptr)
         free(dead_thread);

@@ -39,6 +39,8 @@ struct thread {
     // nr of timer interrupts left to do its work (quantum)
     int ttl;
     void* stack_base;
+    // stack used whenever userland threads goes into ring 0
+    void* kernel_stack;
 
     bool is_starving(uint64_t interrupt_nr) {
         return interrupt_nr - ready_time >= STARVING_TIME;
@@ -73,11 +75,20 @@ inline void thread::thread_exit() {
     while (true) {;}
 }
 
+// creates a kernel process with 1 thread. notifies the scheduler about the thread
+struct process *create_kernel_process(char *name, void(*function)(void*), void *arg);
+// creates a user process with 1 thread. notifies the scheduler about the thread
+struct process *create_user_process(char *name, uint64_t entry_point, void *arg);
+
+// used by kernel. exposing this function to userspace will lead to creashes
 // creates a thread and notifies the scheduler about it
 // set proc to nullptr if you want to make a new process for the thread
-struct thread* add_thread(struct process* proc, char* name, void(*function)(void*), void* arg);
-// creates a process with one thread. notifies the scheduler about the created thread
-struct process* create_process(char* name, void(*function)(void*), void* arg);
+struct thread* add_kernel_thread(struct process* proc, char* name, void(*function)(void*), void* arg);
+
+// creates a thread for a userpsace process and notifies the scheduler about it
+// set proc to nullptr if you want to make a new process for the thread
+struct thread* add_user_thread(struct process* proc, char* name, uint64_t entry_point, void* arg);
+
 // maps a process struct to the current running program
 // will only be used by the kernel to make itself known to the scheduler
 struct process *make_current_execution_process(char* name);

@@ -2,8 +2,10 @@
 #include "interrupts/tss.hpp"
 #include <cstdint>
 
-// create gdt table of 5 entries (NULL, kernel code, kernel data, and the TSS split into 2)
-struct gdt_entry gdt[5];
+#define GDT_ENTRY_NR    7
+// create gdt table of 7 entries 
+// NULL, kernel code, kernel data, TSS split into 2, user code, user data
+struct gdt_entry gdt[7];
 struct gdt_ptr gdtr;
 
 extern struct tss_entry tss;
@@ -55,8 +57,18 @@ void setup_gdt() {
     uint32_t tss_limit = sizeof(struct tss_entry) - 1;
     gdt_set_tss(3, tss_base, tss_limit);
 
+    // user code segment
+    // Access 0xFA: Present(1), Ring3(11), System(1), Executable(1), Read(1)
+    // Gran   0xAF: same as kernel code
+    gdt_set_gate(5, 0xFA, 0xAF);
+    
+    // user data segment
+    // Access 0xF2: Present(1), Ring3(11), System(1), Data(0), Write(1)
+    // Gran   0xAF: same as kernel data
+    gdt_set_gate(6, 0xF2, 0xAF);
+
     // set up pointer
-    gdtr.limit = (sizeof(struct gdt_entry) * 5) - 1;
+    gdtr.limit = (sizeof(struct gdt_entry) * GDT_ENTRY_NR) - 1;
     gdtr.base  = reinterpret_cast<std::uint64_t>(&gdt);
 
     load_gdt((uint64_t)&gdtr);

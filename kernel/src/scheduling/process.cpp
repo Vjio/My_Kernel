@@ -1,20 +1,22 @@
 #include "process.hpp"
-#include "../memory/heap.hpp"
-#include "../memory/memory.hpp"
-#include "../memory/vmm.hpp"
+#include "memory/heap.hpp"
+#include "memory/memory.hpp"
+#include "memory/vmm.hpp"
+#include "memory/pmm.hpp"
 #include "scheduler.hpp"
-#include "../interrupts/acpi.hpp"
+#include "interrupts/acpi.hpp"
+#include "gdt.hpp"
+#include "interrupts/tss.hpp"
+
+// highest address in thread's own half of the page table
+#define USER_STACK_TOP  0x00007FFFFFFFF000ULL
 
 size_t next_free_pid = 0;
 
 extern "C" uint64_t get_cr3();
 
-struct thread* add_thread(struct process* proc, char* name, void(*function)(void*), void* arg) {
-    if (proc == nullptr) {
-        create_process(name, function, arg);
-        return proc->threads;
-    }
-
+// allocated memory and sets thread's inner flags
+static struct thread *add_thread_common(struct process *proc, char *name) {
     struct thread* thread = reinterpret_cast<struct thread*>(malloc(sizeof(struct thread)));
 
     memcpy(thread->name, name, MAX_NAME_LEN);
@@ -23,17 +25,15 @@ struct thread* add_thread(struct process* proc, char* name, void(*function)(void
     thread->base_level = DEFAULT_LEVEL;
     thread->current_level = DEFAULT_LEVEL;
     thread->parent = proc;
-    thread->int_frame.cs = 0x08;
-    thread->int_frame.ss = 0x10;
-    thread->int_frame.rip = (uint64_t)function;
-    thread->int_frame.rdi = (uint64_t)arg;
     thread->int_frame.rbp = 0;
     thread->int_frame.rflags = 0x202;
 
-    void *stack = malloc(STACK_SIZE);
-    thread->stack_base = stack;
-    thread->int_frame.rsp = reinterpret_cast<uint64_t>(stack) + STACK_SIZE;
+    return thread;
+}
 
+// updates thread inner list and notifies scheduler of it
+// only call this after thread is fully made
+static void link_and_schedule(struct process *proc, struct thread *thread) {
     // push to front of list of threads
     thread->next_in_process = proc->threads;
     if (proc->threads)
@@ -42,12 +42,10 @@ struct thread* add_thread(struct process* proc, char* name, void(*function)(void
 
     thread->next = nullptr;
     Scheduler::get_current_scheduler()->insert_thread(thread);
-
-    return thread;
 }
 
-struct process* create_process(char* name, void(*function)(void*), void* arg) {
-    struct process* process = reinterpret_cast<struct process*>(malloc(sizeof(struct process)));
+struct process *create_process_common(char *name) {
+    struct process *process = reinterpret_cast<struct process *>(malloc(sizeof(struct process)));
 
     memcpy(process->name, name, MAX_NAME_LEN);
     process->pid = next_free_pid++;
@@ -56,9 +54,75 @@ struct process* create_process(char* name, void(*function)(void*), void* arg) {
     uint64_t pml4_phys = VMM::create_address_space();
     process->root_page_table = reinterpret_cast<void *>(pml4_phys);
 
-    add_thread(process, name, function, arg);
+    return process;
+}
+
+struct process *create_kernel_process(char* name, void(*function)(void*), void* arg) {
+    struct process* process = create_process_common(name);
+
+    add_kernel_thread(process, name, function, arg);
 
     return process;
+}
+
+struct process *create_user_process(char *name, uint64_t entry_point, void *arg) {
+    struct process* process = create_process_common(name);
+
+    add_user_thread(process, name, entry_point, arg);
+
+    return process;
+}
+
+struct thread *add_kernel_thread(struct process *proc, char *name, void(*function)(void*), void *arg) {
+    if (proc == nullptr) {
+        create_kernel_process(name, function, arg);
+        return proc->threads;
+    }
+    struct thread* thread = add_thread_common(proc, name);
+
+    thread->int_frame.cs = GDT_KERNEL_CODE;
+    thread->int_frame.ss = GDT_KERNEL_DATA;
+    thread->int_frame.rip = (uint64_t)function;
+    thread->int_frame.rdi = (uint64_t)arg;
+
+    // kernel threads never change privilege level, so they only ever need one stack
+    void* stack = malloc(STACK_SIZE);
+    thread->stack_base = stack;
+    thread->int_frame.rsp = reinterpret_cast<uint64_t>(stack) + STACK_SIZE;
+    thread->kernel_stack = nullptr;
+
+    link_and_schedule(proc, thread);
+    return thread;
+}
+
+struct thread *add_user_thread(struct process *proc, char *name, uint64_t entry_point, void *arg) {
+    if (proc == nullptr) {
+        create_user_process(name, entry_point, arg);
+        return proc->threads;
+    }
+    struct thread *thread = add_thread_common(proc, name);
+
+    thread->int_frame.cs = GDT_USER_CODE;
+    thread->int_frame.ss = GDT_USER_DATA;
+    thread->int_frame.rip = entry_point;
+    thread->int_frame.rdi = (uint64_t)arg;
+
+    // ring0 landing stack
+    thread->kernel_stack = malloc(STACK_SIZE);
+
+    // map ring3 stack
+    uint64_t hhdm = VMM::get_hhdm_offset();
+    for (uint64_t off = 0; off < STACK_SIZE; off += FRAME_SIZE) {
+        uint64_t phys_addr = PMM::alloc_frame();
+        VMM::map_page(reinterpret_cast<uint64_t*>(proc->root_page_table),
+                      USER_STACK_TOP - STACK_SIZE + off, phys_addr,
+                      PTE_PRESENT | PTE_READ_WRITE | PTE_USER, hhdm);
+    }
+    thread->stack_base = reinterpret_cast<void*>(USER_STACK_TOP - STACK_SIZE);
+    thread->int_frame.rsp = USER_STACK_TOP;
+
+    link_and_schedule(proc, thread);
+    return thread;
 }
 
 static struct thread *make_current_execution_thread(char *name, struct process *parent) {
