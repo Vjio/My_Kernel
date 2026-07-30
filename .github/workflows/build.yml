@@ -1,0 +1,24 @@
+name: Build kernel
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Install build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang lld nasm
+
+      - name: Fetch kernel deps
+        run: ./kernel/get-deps
+
+      - name: Build kernel
+        run: make -C kernel TOOLCHAIN=llvm
