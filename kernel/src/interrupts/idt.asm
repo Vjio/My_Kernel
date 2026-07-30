@@ -1,7 +1,7 @@
 global load_idt
 extern exception_handler
-
 extern irq_handler
+extern syscall_handler
 
 ; macro definitions
 ; some interrupts automatically push an error code
@@ -150,6 +150,48 @@ irq_common_stub:
 
     ; return to whatever code was running before the interrupt fired
     iretq
+syscall_stub:
+    push qword 0    ; dummy error code
+    push qword 0x80 ; vector number
+    push rax
+    push rbx
+    push rcx
+    push rdx
+    push rsi
+    push rdi
+    push rbp
+    push r8
+    push r9
+    push r10
+    push r11
+    push r12
+    push r13
+    push r14
+    push r15
+
+    ; pass every register to function as a struct on the stack
+    lea rdi, [rsp]
+    call syscall_handler
+
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop r11
+    pop r10
+    pop r9
+    pop r8
+    pop rbp
+    pop rdi
+    pop rsi
+    pop rdx
+    pop rcx
+    pop rbx
+    pop rax
+
+    ; return to whatever code was running before the interrupt fired
+    add rsp, 16
+    iretq
 
 load_idt:
     lidt [rdi]
@@ -170,3 +212,5 @@ global irq_stub_0,  irq_stub_1,  irq_stub_2,  irq_stub_3
 global irq_stub_4,  irq_stub_5,  irq_stub_6,  irq_stub_7
 global irq_stub_8,  irq_stub_9,  irq_stub_10, irq_stub_11
 global irq_stub_12, irq_stub_13, irq_stub_14, irq_stub_15
+
+global syscall_stub

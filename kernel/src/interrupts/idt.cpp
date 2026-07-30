@@ -119,6 +119,20 @@ extern "C" void irq_handler(interrupt_frame *frame) {
     apic_send_eoi(); 
 }
 
+extern "C" void syscall_stub();
+
+// this will try to replicate linux syscalls as much as possible (at least on the argument side of things)
+extern "C" void syscall_handler(interrupt_frame *frame) {
+    switch (frame->rax) {
+        case 0:
+            
+            break;
+        default:
+            frame->rax = static_cast<uint64_t>(-1);
+            break;
+    }
+}
+
 static struct idt_entry idt[256];
 static struct idtr idtr_reg;
 
@@ -151,6 +165,9 @@ void setup_idt() {
     for (int i = 0; i < HARDWARE_EXCEPTION_NR; i++) {
         idt_set_descriptor(i + SOFTWARE_EXCEPTION_NR, irq_stub_table[i], 0x8E, 0); 
     }
+
+    // 0xEE => sets DPL to 3
+    idt_set_descriptor(0x80, (void*)syscall_stub, 0xEE, 0);
 
     // load the idt
     load_idt(reinterpret_cast<uint64_t>(&idtr_reg));
