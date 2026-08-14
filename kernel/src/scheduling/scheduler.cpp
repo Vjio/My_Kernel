@@ -88,7 +88,8 @@ void Scheduler::every_tick(struct interrupt_frame *frame) {
             dead_thread = running_thread;
             // convetion, if process threads points to a dead thread
             // process has no other threads to run and must be freed
-            dead_process = running_thread->parent;
+            if (dead_thread->parent->threads->status == DEAD)
+                dead_process = running_thread->parent;
 
         } else if (running_thread->status == WAITING) {
             must_switch = true;

@@ -75,7 +75,7 @@ struct process *create_user_process(char *name, uint64_t entry_point, void *arg)
 
 struct thread *add_kernel_thread(struct process *proc, char *name, void(*function)(void*), void *arg) {
     if (proc == nullptr) {
-        create_kernel_process(name, function, arg);
+        proc = create_kernel_process(name, function, arg);
         return proc->threads;
     }
     struct thread* thread = add_thread_common(proc, name);
@@ -97,7 +97,7 @@ struct thread *add_kernel_thread(struct process *proc, char *name, void(*functio
 
 struct thread *add_user_thread(struct process *proc, char *name, uint64_t entry_point, void *arg) {
     if (proc == nullptr) {
-        create_user_process(name, entry_point, arg);
+        proc = create_user_process(name, entry_point, arg);
         return proc->threads;
     }
     struct thread *thread = add_thread_common(proc, name);
