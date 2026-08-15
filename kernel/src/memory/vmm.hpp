@@ -23,6 +23,10 @@ class VMM {
     static uint64_t create_address_space();
     static void destroy_address_space(void* root_page_table);
     static uint64_t get_hhdm_offset();
+    // validate that the given memory address is mappend and belongs to userland memory
+    // true -> address is valid
+    // flase -> address is invalid
+    bool validate_userland_memory(void *address, size_t length, bool require_write);
 
     private:
     // get value at table's index

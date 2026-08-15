@@ -8,6 +8,8 @@ uint64_t kernel_pml4_phys = 0;
 extern "C" uint64_t get_cr3();
 extern "C" void flush_tlb(uint64_t addr);
 
+static constexpr uint64_t USER_SPACE_TOP = 0x0000800000000000ull;
+
 void VMM::init(uint64_t hhdm_offset) {
     l_hhdm_offset = hhdm_offset;
     kernel_pml4_phys = get_cr3() & ~0xFFFull;
@@ -116,3 +118,69 @@ void VMM::free_table(uint64_t table_phys, int level) {
     PMM::free_frame(table_phys);
 }
 
+// returns the address of the next table or nullptr if it doesn't exist
+static uint64_t *peek_table(uint64_t *table, uint64_t index, uint64_t hhdm_offset) {
+    if ((table[index] & PTE_PRESENT) == 0)
+        return nullptr;
+    uint64_t next_phys = table[index] & ~0xFFFull;
+    return reinterpret_cast<uint64_t *>(next_phys + hhdm_offset);
+}
+
+// checks if one 4KB page is valid 
+// do not call this function from inside the kernel
+// true -> valid
+// false -> invalid
+static bool is_user_page_ok(uint64_t vaddr, bool require_write, uint64_t hhdm_offset) {
+    uint64_t pml4_i = (vaddr >> 39) & 0x1FF;
+    uint64_t pdpt_i = (vaddr >> 30) & 0x1FF;
+    uint64_t pd_i   = (vaddr >> 21) & 0x1FF;
+    uint64_t pt_i   = (vaddr >> 12) & 0x1FF;
+
+    // caller's own CR3 since syscalls run in the caller's addr space
+    uint64_t *pml4 = VMM::get_pml4(hhdm_offset);
+    // start checking tables
+    if ((pml4[pml4_i] & PTE_PRESENT) == 0 || (pml4[pml4_i] & PTE_USER) == 0) 
+        return false;
+
+    uint64_t *pdpt = peek_table(pml4, pml4_i, hhdm_offset);
+    if (!pdpt || (pdpt[pdpt_i] & PTE_PRESENT) == 0 || (pdpt[pdpt_i] & PTE_USER) == 0) 
+        return false;
+
+    uint64_t *pd = peek_table(pdpt, pdpt_i, hhdm_offset);
+    if (!pd || (pd[pd_i] & PTE_PRESENT) == 0 || (pd[pd_i] & PTE_USER) == 0) 
+        return false;
+
+    uint64_t *pt = peek_table(pd, pd_i, hhdm_offset);
+    if (!pt) return false;
+
+    uint64_t pte = pt[pt_i];
+    if ((pte & PTE_PRESENT) == 0 || (pte & PTE_USER) == 0) 
+        return false;
+    if (require_write && (pte & PTE_READ_WRITE) == 0)      
+        return false;
+
+    return true;
+}
+
+bool VMM::validate_userland_memory(void *address, size_t length, bool require_write) {
+    uint64_t start = reinterpret_cast<uint64_t>(address);
+
+    if (address == nullptr || length == 0)
+        return false;
+    if (start >= USER_SPACE_TOP)
+        return false;
+    if (start + length < start) // check for overflow   
+        return false;
+    if (start + length > USER_SPACE_TOP) // check if it spills into kernel's half
+        return false;
+
+    // round down start to the nearest page
+    uint64_t page = start & ~(FRAME_SIZE - 1);
+    uint64_t end  = start + length;
+
+    for (; page < end; page += FRAME_SIZE) {
+        if (!is_user_page_ok(page, require_write, l_hhdm_offset))
+            return false;
+    }
+    return true;
+}
