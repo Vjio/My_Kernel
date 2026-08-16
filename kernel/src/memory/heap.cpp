@@ -19,7 +19,7 @@ void heap_init(uint64_t hhdm_offset) {
     heap_start->next = nullptr;
     heap_start->prev = nullptr;
     heap_start->status = FREE;
-    
+
     heap_start->size = INIT_SIZE - sizeof(struct heap_node);
     l_hhdm_offset = hhdm_offset;
 }

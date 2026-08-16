@@ -19,6 +19,8 @@ class VMM {
     // set pml4 to null if you want the page to be mapped in process own page map
     static void map_page(uint64_t *pml4, uint64_t virtual_addr, uint64_t physical_addr,
         uint64_t flags, uint64_t hhdm_offset);
+    // reverse of map page, frees a mapped page
+    void unmap_page(uint64_t *pml4, uint64_t virtual_addr, uint64_t hhdm_offset);
 
     static uint64_t create_address_space();
     static void destroy_address_space(void* root_page_table);
@@ -26,7 +28,7 @@ class VMM {
     // validate that the given memory address is mappend and belongs to userland memory
     // true -> address is valid
     // flase -> address is invalid
-    bool validate_userland_memory(void *address, size_t length, bool require_write);
+    static bool validate_userland_memory(void *address, size_t length, bool require_write);
 
     private:
     // get value at table's index

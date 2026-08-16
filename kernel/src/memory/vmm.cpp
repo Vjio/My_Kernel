@@ -29,6 +29,14 @@ uint64_t VMM::get_hhdm_offset() {
     return l_hhdm_offset;
 }
 
+// returns the address of the next table or nullptr if it doesn't exist
+static uint64_t *peek_table(uint64_t *table, uint64_t index, uint64_t hhdm_offset) {
+    if ((table[index] & PTE_PRESENT) == 0)
+        return nullptr;
+    uint64_t next_phys = table[index] & ~0xFFFull;
+    return reinterpret_cast<uint64_t *>(next_phys + hhdm_offset);
+}
+
 uint64_t *VMM::get_page_table_index(uint64_t* table, uint64_t index, uint64_t hhdm_offset) {
     if ((table[index] & PTE_PRESENT) == 0) {
         // index hasn't been allocated. ask pmm for a new frame
@@ -66,6 +74,32 @@ void VMM::map_page(uint64_t *pml4, uint64_t virtual_addr, uint64_t physical_addr
     pt[pt_index] = (physical_addr & ~0xFFFull) | flags;
 
     // flush TBL since we just invalidated whatever was at that address
+    flush_tlb(virtual_addr);
+}
+
+void VMM::unmap_page(uint64_t *pml4, uint64_t virtual_addr, uint64_t hhdm_offset) {
+    if (pml4 == nullptr)
+        pml4 = VMM::get_pml4(hhdm_offset);
+
+    uint64_t pml4_i = (virtual_addr >> 39) & 0x1FF;
+    uint64_t pdpt_i = (virtual_addr >> 30) & 0x1FF;
+    uint64_t pd_i   = (virtual_addr >> 21) & 0x1FF;
+    uint64_t pt_i   = (virtual_addr >> 12) & 0x1FF;
+
+    uint64_t *pdpt = peek_table(pml4, pml4_i, hhdm_offset);
+    if (pdpt == nullptr)
+        return;
+
+    uint64_t *pd = peek_table(pdpt, pdpt_i, hhdm_offset);
+    if (pd == nullptr)
+        return;
+
+    uint64_t *pt = peek_table(pd, pd_i, hhdm_offset);
+    if (pt == nullptr)
+        return;
+
+    pt[pt_i] = 0;
+
     flush_tlb(virtual_addr);
 }
 
@@ -116,14 +150,6 @@ void VMM::free_table(uint64_t table_phys, int level) {
     }
 
     PMM::free_frame(table_phys);
-}
-
-// returns the address of the next table or nullptr if it doesn't exist
-static uint64_t *peek_table(uint64_t *table, uint64_t index, uint64_t hhdm_offset) {
-    if ((table[index] & PTE_PRESENT) == 0)
-        return nullptr;
-    uint64_t next_phys = table[index] & ~0xFFFull;
-    return reinterpret_cast<uint64_t *>(next_phys + hhdm_offset);
 }
 
 // checks if one 4KB page is valid 
