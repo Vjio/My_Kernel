@@ -23,6 +23,8 @@ class Scheduler {
     // returns scheduler responsible for current cpu
     // makes a new scheduler object if one doesn't exist
     static Scheduler *get_current_scheduler();
+    // returns current running thread on the running cpu
+    struct thread *get_running_thread();
 
     private:
     Scheduler(char *name);

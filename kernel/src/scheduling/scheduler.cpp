@@ -32,6 +32,10 @@ Scheduler *Scheduler::get_current_scheduler() {
     return g_schedulers[get_current_cpu_id()] ;
 }
 
+struct thread *Scheduler::get_running_thread() {
+    return running_thread;
+}
+
 void Scheduler::insert_thread(struct thread *thread) {
     queue[thread->current_level].push(thread);
 }
