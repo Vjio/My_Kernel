@@ -1,10 +1,14 @@
 #pragma once
 #include "../interrupts/idt.hpp"
 #include <cstddef>
+#include "../locking/lock.h"
 
-#define STARVING_TIME   1000
-#define MAX_NAME_LEN    32
-#define STACK_SIZE      FRAME_SIZE * 4
+#define STARVING_TIME       1000
+#define MAX_NAME_LEN        32
+#define STACK_SIZE          FRAME_SIZE * 4
+// highest address in thread's own half of the page table
+#define USER_STACK_TOP      0x00007FFFFFFFF000ULL
+#define STACK_GUARD_SIZE    FRAME_SIZE
 
 // WAITING is currently unused
 typedef enum {
@@ -54,7 +58,9 @@ struct process {
     void* root_page_table;
     struct thread* threads;
     size_t pid;
+    size_t nr_of_threads;
     char name[MAX_NAME_LEN];
+    struct spinlock lock;
 };
 
 inline void thread::thread_exit() {

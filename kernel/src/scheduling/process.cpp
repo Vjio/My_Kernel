@@ -8,9 +8,6 @@
 #include "gdt.hpp"
 #include "interrupts/tss.hpp"
 
-// highest address in thread's own half of the page table
-#define USER_STACK_TOP  0x00007FFFFFFFF000ULL
-
 size_t next_free_pid = 0;
 
 extern "C" uint64_t get_cr3();
@@ -27,6 +24,7 @@ static struct thread *add_thread_common(struct process *proc, char *name) {
     thread->parent = proc;
     thread->int_frame.rbp = 0;
     thread->int_frame.rflags = 0x202;
+    thread->parent->nr_of_threads++;
 
     return thread;
 }
@@ -50,6 +48,8 @@ struct process *create_process_common(char *name) {
     memcpy(process->name, name, MAX_NAME_LEN);
     process->pid = next_free_pid++;
     process->threads = nullptr;
+    process->nr_of_threads = 0;
+    process->lock.locked = false;
 
     uint64_t pml4_phys = VMM::create_address_space();
     process->root_page_table = reinterpret_cast<void *>(pml4_phys);
@@ -78,6 +78,8 @@ struct thread *add_kernel_thread(struct process *proc, char *name, void(*functio
         proc = create_kernel_process(name, function, arg);
         return proc->threads;
     }
+
+    acquire(&proc->lock);
     struct thread* thread = add_thread_common(proc, name);
 
     thread->int_frame.cs = GDT_KERNEL_CODE;
@@ -92,6 +94,8 @@ struct thread *add_kernel_thread(struct process *proc, char *name, void(*functio
     thread->kernel_stack = nullptr;
 
     link_and_schedule(proc, thread);
+    release(&proc->lock);
+
     return thread;
 }
 
@@ -100,6 +104,8 @@ struct thread *add_user_thread(struct process *proc, char *name, uint64_t entry_
         proc = create_user_process(name, entry_point, arg);
         return proc->threads;
     }
+
+    acquire(&proc->lock);
     struct thread *thread = add_thread_common(proc, name);
 
     thread->int_frame.cs = GDT_USER_CODE;
@@ -110,19 +116,24 @@ struct thread *add_user_thread(struct process *proc, char *name, uint64_t entry_
     // ring0 landing stack
     thread->kernel_stack = malloc(STACK_SIZE);
 
+    // compute each thread stack's offset
+    uint64_t stack_top = USER_STACK_TOP - (STACK_SIZE + STACK_GUARD_SIZE) *
+        (thread->parent->nr_of_threads - 1);
     // map ring3 stack
     uint64_t hhdm = VMM::get_hhdm_offset();
     uint64_t *pml4_virt = reinterpret_cast<uint64_t *>(
         reinterpret_cast<uint64_t>(proc->root_page_table) + hhdm);
     for (uint64_t off = 0; off < STACK_SIZE; off += FRAME_SIZE) {
         uint64_t phys_addr = PMM::alloc_frame();
-        VMM::map_page(pml4_virt, USER_STACK_TOP - STACK_SIZE + off, phys_addr,
-                      PTE_PRESENT | PTE_READ_WRITE | PTE_USER, hhdm);
+        VMM::map_page(pml4_virt, stack_top - STACK_SIZE + off, phys_addr,
+                        PTE_PRESENT | PTE_READ_WRITE | PTE_USER, hhdm);
     }
-    thread->stack_base = reinterpret_cast<void*>(USER_STACK_TOP - STACK_SIZE);
-    thread->int_frame.rsp = USER_STACK_TOP;
+    thread->stack_base = reinterpret_cast<void*>(stack_top - STACK_SIZE);
+    thread->int_frame.rsp = stack_top;
 
     link_and_schedule(proc, thread);
+    release(&proc->lock);
+
     return thread;
 }
 
