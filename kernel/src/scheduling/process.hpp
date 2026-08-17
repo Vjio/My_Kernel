@@ -64,6 +64,7 @@ struct process {
 };
 
 inline void thread::thread_exit() {
+    acquire(&parent->lock);
     if (prev_in_process != nullptr)
         prev_in_process->next_in_process = next_in_process;
     else
@@ -71,12 +72,9 @@ inline void thread::thread_exit() {
 
     if (next_in_process != nullptr)
         next_in_process->prev_in_process = prev_in_process;
+    parent->nr_of_threads--;
 
-    if (parent->threads == nullptr)
-        // convetion, if process threads points to a dead thread
-        // process has no other threads to run and must be freed
-        parent->threads = this;
-
+    release(&parent->lock);
     status = DEAD;
     while (true) {;}
 }
