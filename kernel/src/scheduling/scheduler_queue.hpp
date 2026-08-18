@@ -1,6 +1,7 @@
 #pragma once
 #include "process.hpp"
 #include "../memory/heap.hpp"
+#include "../memory/vmm.hpp"
 
 class Scheduler;
 
@@ -36,21 +37,24 @@ class SchedulerQueue {
         tail = new_task;
     }
 
-    // removes any dead threads from queue
+    // removes any dead threads from the head of the queue
+    // currently unused
     void clean_up() {
         if (head == nullptr)
             return;
-        
+
         struct thread *temp;
         while (head != nullptr && head->status == DEAD) {
             temp = peek();
-            free(temp->stack_base);
-            free(temp);
             pop();
+            free(temp->stack_base);
+            free(temp->kernel_stack);
+            free(temp);
         }
     }
 
     // pops the first ready thread from a queue and returns it
+    // removes any dead threads it finds while walking the queue
     struct thread *extract_ready_thread() {
         if (head == nullptr)
             return head;
@@ -60,7 +64,19 @@ class SchedulerQueue {
             pop();
             return temp;
         }
-        
+
+        while (head != nullptr && head->status == DEAD) {
+            temp = peek();
+            pop();
+            free(temp->stack_base);
+            free(temp->kernel_stack);
+            if (temp->parent->nr_of_threads == 0) {
+                VMM::destroy_address_space(temp->parent->root_page_table);
+                free(temp->parent);
+            }
+            free(temp);
+        }
+
         while (temp->next != nullptr) {
             if (temp->next->status == READY) {
                 struct thread *next_thread = temp->next;
@@ -68,6 +84,24 @@ class SchedulerQueue {
                 if (next_thread == tail)
                     tail = temp;
                 return next_thread;
+            }
+            else if (temp->next->status == DEAD) {
+                // jump to next thread
+                struct thread *next_thread = temp->next;
+                temp->next = next_thread->next;
+                if (next_thread == tail)
+                    tail = temp;
+                // free mem
+                free(next_thread->kernel_stack);
+                free(next_thread->stack_base);
+                if (next_thread->parent->nr_of_threads == 0) {
+                    VMM::destroy_address_space(next_thread->parent->root_page_table);
+                    free(next_thread->parent);
+                }
+                free(next_thread);
+                // continue so that next iteration of the while checks the new temp->next
+                // not continuing would jump over a node
+                continue;
             }
             temp = temp->next;
         }

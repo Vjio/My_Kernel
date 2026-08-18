@@ -27,7 +27,6 @@ Currently, there is no real way to distinguish kernel related tasks to userland 
 - a starving task will return to its initial queue once it has finished running (if any other promoting/demoting rules do not apply)
 
 ## Behaviour
-- every clock tick, the scheduler will free any dead's threads leftover memory (its stack and struct)
 - every clock tick, the scheduler will check if the current process can be taken off the CPU (quantum expired, process blocked or terminated). if so, it will insert the process into its queue and pick a new process
 - on every clock tick, if the currently running tasks is not important enough (in the 10th queue. or 9th if the 10th queue is not empty), the scheduler will scan the 9th and 10th queue. if any tasks are ready to be schedule inside of those queues, the currently running tasks is evicted in favour of this newly ready tasks.
 - every nth clock ticks, the scheduler will scan the lower queues to see if any process have been starving for too long. this scan will stop once the head of the a queue is not starving

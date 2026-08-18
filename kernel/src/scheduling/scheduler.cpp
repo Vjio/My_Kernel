@@ -82,23 +82,10 @@ void Scheduler::wake_sleeping() {
 }
 
 void Scheduler::every_tick(struct interrupt_frame *frame) {
-    // free dead thread, if any 
-    if (thread_to_reap != nullptr) {
-        free(thread_to_reap->kernel_stack);
-        free(thread_to_reap);
-        thread_to_reap = nullptr;
-    }
-
-    struct thread *dead_thread = nullptr;
-    struct process *dead_process = nullptr;
-
     if (running_thread != nullptr) [[likely]] {
         bool must_switch = false;
         if (running_thread->status == DEAD) {
             must_switch = true;
-            dead_thread = running_thread;
-            if (dead_thread->parent->nr_of_threads == 0)
-                dead_process = running_thread->parent;
 
         } else if (running_thread->status == WAITING) {
             must_switch = true;
@@ -141,14 +128,6 @@ void Scheduler::every_tick(struct interrupt_frame *frame) {
     if (running_thread->kernel_stack != nullptr) {
         tss.rsp[0] = reinterpret_cast<uint64_t>(running_thread->kernel_stack) + STACK_SIZE;
     }
-
-    if (dead_thread != nullptr)
-        thread_to_reap = dead_thread;
-
-    if (dead_process != nullptr) {
-        VMM::destroy_address_space(dead_process->root_page_table);
-        free(dead_process);
-    }
 }
 
 void Scheduler::every_n_tick() {
@@ -165,8 +144,6 @@ struct thread *Scheduler::check_high_prio() {
     for (int i = 9; i >= 8; i--) {
         if (queue[i].empty())
             continue;
-
-        queue[i].clean_up();
         
         struct thread *next_task = queue[i].extract_ready_thread();
         next_task->status = RUNNING;
@@ -181,8 +158,6 @@ struct thread *Scheduler::find_next_task() {
     for (int i = 9; i >= 0; i--) {
         if (queue[i].empty())
             continue;
-
-        queue[i].clean_up();
         
         struct thread *next_task = queue[i].extract_ready_thread();
         next_task->status = RUNNING;

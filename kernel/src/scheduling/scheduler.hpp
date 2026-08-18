@@ -29,7 +29,6 @@ class Scheduler {
     private:
     Scheduler(char *name);
     uint64_t interrupt_nr = 0;
-    struct thread *thread_to_reap = nullptr;
     // current running thread on the CPU
     struct thread *running_thread = nullptr;
     SchedulerQueue queue[10];
