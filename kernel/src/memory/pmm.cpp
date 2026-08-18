@@ -9,7 +9,8 @@ namespace {
     inline static uint8_t* bitmap           = nullptr;
     inline static uint64_t bit_map_size     = 0;
     inline static uint64_t total_frames     = 0;
-    inline static uint64_t nr_free_frames      = 0;
+    inline static uint64_t nr_free_frames   = 0;
+    inline static struct spinlock lock;
     // index of the first byte with at least 1 free frame (at least 1 bit set to 0)
     // convention, if first_free_frame was set to a OXFF byte, that means there are no free frames
     inline static uint64_t first_free_frame = 0;
@@ -33,6 +34,7 @@ namespace {
 }
 
 void PMM::init_PMM(struct limine_memmap_response* memmap, uint64_t hhdm_offset) {
+    lock.locked = false;
     uint64_t highest_address = 0;
     uint64_t bitmap_physical_base = 0;
     bitmap = nullptr;
@@ -109,9 +111,12 @@ void PMM::init_PMM(struct limine_memmap_response* memmap, uint64_t hhdm_offset) 
 }
 
 paddr_t PMM::alloc_frame() {
+    acquire(&lock);
     // convention, if first_free_frame was set to a OXFF byte, that means there are no free frames
-    if (bitmap[first_free_frame] == 0xFF)
+    if (bitmap[first_free_frame] == 0xFF) {
+        release(&lock);
         return 0;
+    }
 
     // find first 0 bit in byte
     uint8_t bit = 0;
@@ -138,8 +143,10 @@ paddr_t PMM::alloc_frame() {
                 break;
         
         // found a byte with free bits
-        if (first_free_frame < bit_map_size)
+        if (first_free_frame < bit_map_size) {
+            release(&lock);
             return new_frame;
+        }
 
         // wrap arround and keep scanning for a free bit
         for (first_free_frame = 0; first_free_frame < index; first_free_frame++)
@@ -150,18 +157,25 @@ paddr_t PMM::alloc_frame() {
         // of a byte with free bits
         // if not, first_free_frame now points to the index of a full byte
         // in both cases, we just return the new alloced frame. nothing else to do
+        release(&lock);
         return new_frame;
     }
+    release(&lock);
     return new_frame;
 }
 
 paddr_t PMM::alloc_frames(uint64_t nr) {
+    acquire(&lock);
     // convention, if first_free_frame was set to a OXFF byte, that means there are no free frames
-    if (bitmap[first_free_frame] == 0xFF)
+    if (bitmap[first_free_frame] == 0xFF) {
+        release(&lock);
         return 0;
+    }
 
-    if (nr > total_frames)
+    if (nr > total_frames) {
+        release(&lock);
         return 0;
+    }
 
     // find first sequence of free nr frames
     uint64_t index = first_free_frame;
@@ -220,6 +234,7 @@ paddr_t PMM::alloc_frames(uint64_t nr) {
     }
 
     if (sum != nr) {
+        release(&lock);
         // allocation failed! this really shouldn't happen here
         printf("logically unreachalbe line in PMM!\n");
         return 0;
@@ -253,8 +268,10 @@ paddr_t PMM::alloc_frames(uint64_t nr) {
                 break;
         
         // found a byte with free bits
-        if (first_free_frame < bit_map_size)
+        if (first_free_frame < bit_map_size) {
+            release(&lock);
             return new_frame;
+        }
 
         // wrap arround and keep scanning for a free bit
         for (first_free_frame = 0; first_free_frame < index; first_free_frame++)
@@ -265,17 +282,21 @@ paddr_t PMM::alloc_frames(uint64_t nr) {
         // of a byte with free bits
         // if not, first_free_frame now points to the index of a full byte
         // in both cases, we just return the new alloced frame. nothing else to do
+        release(&lock);
         return new_frame;
     }
+    release(&lock);
     return new_frame;
 }
 
 void PMM::free_frame(paddr_t address) {
     uint64_t frame_index = address / FRAME_SIZE;
     uint64_t index = frame_index / 8;
-
+    
+    acquire(&lock);
     // if the bit is already 0, the frame is already free
     if (test_bit(frame_index) == 0) {
+        release(&lock);
         // could add a log here for this
         // it shouldn't really happen
         return;
@@ -290,15 +311,18 @@ void PMM::free_frame(paddr_t address) {
     if (index < first_free_frame) {
         first_free_frame = index;
     }
+    release(&lock);
 }
 
 void PMM::free_frames(paddr_t address, uint64_t nr) {
     uint64_t frame_index = address / FRAME_SIZE;
     uint64_t index = frame_index / 8;
     uint8_t bit = frame_index % 8;
-
+    
+    acquire(&lock);
     // if the bit is already 0, the frame is already free
     if (test_bit(frame_index) == 0) {
+        release(&lock);
         // could add a log here for this
         // it shouldn't really happen
         return;
@@ -324,4 +348,5 @@ void PMM::free_frames(paddr_t address, uint64_t nr) {
 
         nr--; 
     }
+    release(&lock);
 }

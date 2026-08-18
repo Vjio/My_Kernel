@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <limine.h>
+#include "../locking/lock.h"
 
 #define FRAME_SIZE   4096
 

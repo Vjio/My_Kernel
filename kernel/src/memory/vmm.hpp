@@ -20,7 +20,7 @@ class VMM {
     static void map_page(uint64_t *pml4, uint64_t virtual_addr, uint64_t physical_addr,
         uint64_t flags, uint64_t hhdm_offset);
     // reverse of map page, frees a mapped page
-    void unmap_page(uint64_t *pml4, uint64_t virtual_addr, uint64_t hhdm_offset);
+    static void unmap_page(uint64_t *pml4, uint64_t virtual_addr, uint64_t hhdm_offset);
 
     static uint64_t create_address_space();
     static void destroy_address_space(void* root_page_table);
