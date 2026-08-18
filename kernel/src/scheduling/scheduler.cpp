@@ -82,6 +82,13 @@ void Scheduler::wake_sleeping() {
 }
 
 void Scheduler::every_tick(struct interrupt_frame *frame) {
+    // free dead thread, if any 
+    if (thread_to_reap != nullptr) {
+        free(thread_to_reap->kernel_stack);
+        free(thread_to_reap);
+        thread_to_reap = nullptr;
+    }
+
     struct thread *dead_thread = nullptr;
     struct process *dead_process = nullptr;
 
@@ -136,7 +143,7 @@ void Scheduler::every_tick(struct interrupt_frame *frame) {
     }
 
     if (dead_thread != nullptr)
-        free(dead_thread);
+        thread_to_reap = dead_thread;
 
     if (dead_process != nullptr) {
         VMM::destroy_address_space(dead_process->root_page_table);

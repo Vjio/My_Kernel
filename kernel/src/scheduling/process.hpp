@@ -44,6 +44,8 @@ struct thread {
     int ttl;
     void* stack_base;
     // stack used whenever userland threads goes into ring 0
+    // heap-allocated (kernel/HHDM shared region), not part of the
+    // process's own address space
     void* kernel_stack;
 
     bool is_starving(uint64_t interrupt_nr) {
