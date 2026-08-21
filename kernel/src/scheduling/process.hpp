@@ -48,6 +48,7 @@ struct thread {
     // stack used whenever userland threads goes into ring 0
     // heap-allocated (kernel/HHDM shared region), not part of the
     // process's own address space
+    // kernelspace or userland
     void *kernel_stack;
 
     bool is_starving(uint64_t interrupt_nr) {
@@ -69,6 +70,7 @@ struct process {
     size_t nr_of_threads;
     char name[MAX_NAME_LEN];
     struct spinlock lock;
+    bool is_kernel_process;
 };
 
 inline void thread::thread_exit() {

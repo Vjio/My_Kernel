@@ -10,7 +10,6 @@
 
 // first node in double linked list
 static struct heap_node *heap_start = nullptr;
-static uint64_t l_hhdm_offset = 0;
 
 void heap_init(uint64_t hhdm_offset) {
     heap_start = reinterpret_cast<struct heap_node *>
@@ -21,7 +20,6 @@ void heap_init(uint64_t hhdm_offset) {
     heap_start->status = FREE;
 
     heap_start->size = INIT_SIZE - sizeof(struct heap_node);
-    l_hhdm_offset = hhdm_offset;
 }
 
 static void split_node(struct heap_node *node, size_t size) {
@@ -56,7 +54,7 @@ static void expand_heap(struct heap_node *last_node, size_t requested_size, bool
     for (int i = 0; i < pages_to_alloc; i++) {
         paddr_t phys_addr = PMM::alloc_frame();
         VMM::map_page(nullptr, heap_end + i * FRAME_SIZE, phys_addr,
-            PTE_PRESENT | PTE_READ_WRITE | PTE_CACHE_DISABLE, l_hhdm_offset);
+            PTE_PRESENT | PTE_READ_WRITE | PTE_CACHE_DISABLE);
     }
 
     struct heap_node *new_node;

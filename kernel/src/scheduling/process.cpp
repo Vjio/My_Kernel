@@ -61,6 +61,7 @@ struct process *create_kernel_process(char* name, void(*function)(void*), void* 
     struct process* process = create_process_common(name);
 
     add_kernel_thread(process, name, function, arg);
+    process->is_kernel_process = true;
 
     return process;
 }
@@ -69,6 +70,7 @@ struct process *create_user_process(char *name, uint64_t entry_point, void *arg)
     struct process* process = create_process_common(name);
 
     add_user_thread(process, name, entry_point, arg);
+    process->is_kernel_process = false;
 
     return process;
 }
@@ -126,7 +128,7 @@ struct thread *add_user_thread(struct process *proc, char *name, uint64_t entry_
     for (uint64_t off = 0; off < STACK_SIZE; off += FRAME_SIZE) {
         uint64_t phys_addr = PMM::alloc_frame();
         VMM::map_page(pml4_virt, stack_top - STACK_SIZE + off, phys_addr,
-                        PTE_PRESENT | PTE_READ_WRITE | PTE_USER, hhdm);
+                        PTE_PRESENT | PTE_READ_WRITE | PTE_USER);
     }
     thread->stack_base = reinterpret_cast<void*>(stack_top - STACK_SIZE);
     thread->int_frame.rsp = stack_top;
