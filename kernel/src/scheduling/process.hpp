@@ -10,8 +10,6 @@
 #define USER_STACK_TOP      0x00007FFFFFFFF000ULL
 #define STACK_GUARD_SIZE    FRAME_SIZE
 #define HEAP_BASE           0x0000500000000000ULL
-#define INTIIAL_HEAP_SIZE   FRAME_SIZE * 4
-
 // WAITING is currently unused
 typedef enum {
     READY,

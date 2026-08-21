@@ -7,6 +7,7 @@
 #include "interrupts/acpi.hpp"
 #include "gdt.hpp"
 #include "interrupts/tss.hpp"
+#include "../stdio.hpp"
 
 size_t next_free_pid = 0;
 
@@ -122,13 +123,11 @@ struct thread *add_user_thread(struct process *proc, char *name, uint64_t entry_
     uint64_t stack_top = USER_STACK_TOP - (STACK_SIZE + STACK_GUARD_SIZE) *
         (thread->parent->nr_of_threads - 1);
     // map ring3 stack
-    uint64_t hhdm = VMM::get_hhdm_offset();
-    uint64_t *pml4_virt = reinterpret_cast<uint64_t *>(
-        reinterpret_cast<uint64_t>(proc->root_page_table) + hhdm);
-    for (uint64_t off = 0; off < STACK_SIZE; off += FRAME_SIZE) {
-        uint64_t phys_addr = PMM::alloc_frame();
-        VMM::map_page(pml4_virt, stack_top - STACK_SIZE + off, phys_addr,
-                        PTE_PRESENT | PTE_READ_WRITE | PTE_USER);
+    if (!VMM::map_pages(reinterpret_cast<uint64_t *>(proc->root_page_table), stack_top - STACK_SIZE,
+        STACK_SIZE / FRAME_SIZE, PTE_PRESENT | PTE_READ_WRITE | PTE_USER)) {
+            // TODO: handle stack allocation failure gracefully
+            printf("thread stack init failed!\n");
+            while (true) {;}
     }
     thread->stack_base = reinterpret_cast<void*>(stack_top - STACK_SIZE);
     thread->int_frame.rsp = stack_top;

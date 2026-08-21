@@ -55,10 +55,17 @@ uint64_t *VMM::get_page_table_index(uint64_t* table, uint64_t index) {
     return reinterpret_cast<uint64_t *>(next_level_phys + l_hhdm_offset);
 }
 
-void VMM::map_page(uint64_t *pml4, uint64_t virtual_addr, uint64_t physical_addr,
+bool VMM::map_page(uint64_t *pml4, uint64_t virtual_addr, uint64_t physical_addr,
     uint64_t flags) {
     if (pml4 == nullptr)
         pml4 = VMM::get_pml4();
+    pml4 += l_hhdm_offset;
+
+    if (physical_addr == 0) {
+        physical_addr = PMM::alloc_frame();
+        if (physical_addr == 0)
+            return false;
+    }
 
     // extract each index (https://blog.xenoscr.net/resources/images/2021-09-06-Exploring-Virtual-Memory-and-Page-Structures/image-20210831220831378.png)
     uint64_t pml4_index = (virtual_addr >> 39) & 0x1FF;
@@ -75,6 +82,13 @@ void VMM::map_page(uint64_t *pml4, uint64_t virtual_addr, uint64_t physical_addr
 
     // flush TBL since we just invalidated whatever was at that address
     flush_tlb(virtual_addr);
+}
+
+bool VMM::map_pages(uint64_t *pml4, uint64_t virtual_addr, uint64_t nr_of_pages, uint64_t flags) {
+    for (uint64_t i = 0; i < nr_of_pages; i++) {
+        if (!VMM::map_page(pml4, virtual_addr + i * FRAME_SIZE, 0, flags))
+            return false;
+    }
 }
 
 void VMM::unmap_page(uint64_t *pml4, uint64_t virtual_addr) {
