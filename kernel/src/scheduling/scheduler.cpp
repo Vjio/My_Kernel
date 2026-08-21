@@ -20,8 +20,8 @@ Scheduler *g_schedulers[MAX_CPUS] = { nullptr };
 Scheduler::Scheduler(char *name) {
     g_schedulers[get_current_cpu_id()] = this;
     Scheduler::interrupt_nr = 0;
-    Scheduler::dummy = create_kernel_process("dummy", dummy_work, nullptr)->threads;
     running_thread = make_current_execution_process(name)->threads;
+    Scheduler::dummy = add_kernel_thread(running_thread->parent, "dummy", dummy_work, nullptr);
 }
 
 Scheduler *Scheduler::get_current_scheduler() {
