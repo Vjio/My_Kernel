@@ -61,7 +61,8 @@ bool VMM::map_page(uint64_t *pml4, uint64_t virtual_addr, uint64_t physical_addr
     uint64_t flags) {
     if (pml4 == nullptr)
         pml4 = VMM::get_pml4();
-    pml4 += l_hhdm_offset;
+    else 
+        pml4 = reinterpret_cast<uint64_t*>(reinterpret_cast<uint64_t>(pml4) + l_hhdm_offset);
 
     bool allocated_frame = false;
     if (physical_addr == 0) {

@@ -77,6 +77,10 @@ class SchedulerQueue {
             free(temp);
         }
 
+        if (head == nullptr)
+            return nullptr;
+
+        temp = head;
         while (temp->next != nullptr) {
             if (temp->next->status == READY) {
                 struct thread *next_thread = temp->next;

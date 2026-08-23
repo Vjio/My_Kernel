@@ -55,7 +55,6 @@ struct process *create_process_common(char *name) {
 
     uint64_t pml4_phys = VMM::create_address_space();
     process->root_page_table = reinterpret_cast<void *>(pml4_phys);
-    heap_init(VMM::get_hhdm_offset(), process);
 
     return process;
 }
@@ -65,6 +64,7 @@ struct process *create_kernel_process(char* name, void(*function)(void*), void* 
 
     add_kernel_thread(process, name, function, arg);
     process->is_kernel_process = true;
+    heap_init(VMM::get_hhdm_offset(), process);
 
     return process;
 }
@@ -74,6 +74,7 @@ struct process *create_user_process(char *name, uint64_t entry_point, void *arg)
 
     add_user_thread(process, name, entry_point, arg);
     process->is_kernel_process = false;
+    heap_init(VMM::get_hhdm_offset(), process);
 
     return process;
 }

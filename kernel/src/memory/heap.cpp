@@ -25,7 +25,7 @@ void heap_init(uint64_t hhdm_offset, struct process *proc) {
             printf("thread heap init failed!\n");
             while(true) {;}
         }
-        proc->heap_end = reinterpret_cast<uint64_t>(heap_start) + (INIT_SIZE / FRAME_SIZE);
+        proc->heap_end = reinterpret_cast<uint64_t>(heap_start) + INIT_SIZE;
 
     } else {
         if (!VMM::map_pages(reinterpret_cast<uint64_t *>(proc->root_page_table), HEAP_BASE,
@@ -35,6 +35,7 @@ void heap_init(uint64_t hhdm_offset, struct process *proc) {
                 printf("thread heap init failed!\n");
                 while(true) {;}
         }
+        heap_start = reinterpret_cast<struct heap_node *>(HEAP_BASE);
         proc->heap_end = HEAP_BASE + INIT_SIZE;
     }
 
