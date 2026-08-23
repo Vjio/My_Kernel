@@ -17,10 +17,13 @@ struct heap_node {
     uint8_t unused[3];
 };
 
-void *malloc(size_t size);
-void *calloc(size_t num, size_t size);
-void *realloc(void *ptr, size_t size);
-void free(void *ptr);
-void heap_init(uint64_t hhdm_offset, struct process *proc);
-void *zalloc(size_t size);
-void heap_dump_stats();
+// TODO: get rid of this after writing ELF loader and file system
+// this is just a bandaid solution so everything can compile into the kernel image
+namespace userland {
+    void *malloc(size_t size);
+    void *calloc(size_t num, size_t size);
+    void *realloc(void *ptr, size_t size);
+    void *zalloc(size_t size);
+    void free(void *ptr);
+    void heap_dump_stats();
+}

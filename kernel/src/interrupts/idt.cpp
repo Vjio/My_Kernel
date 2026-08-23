@@ -111,7 +111,7 @@ extern "C" void irq_handler(interrupt_frame *frame) {
         Scheduler::get_current_scheduler()->schedule(frame);
     }
 
-    if (irq == 1) { // Keyboard
+    if (irq == 1) { // keyboard
         uint8_t scancode = inb(0x60);
         printf("Keyboard interrupt! scancode=0x%x\n", scancode);
     }
@@ -124,9 +124,58 @@ extern "C" void syscall_stub();
 // this will try to replicate linux syscalls as much as possible (at least on the argument side of things)
 extern "C" void syscall_handler(interrupt_frame *frame) {
     switch (frame->rax) {
-        case 0:
-            
+        case 1: {
+            // write(int fd, void buf[count], size_t count) syscall
+            // rdi -> fd
+            // rsi -> buf
+            // rdx -> count
+            int fd = frame->rdi;
+            size_t count = frame->rdx;
+            char *buf = reinterpret_cast<char *>(frame->rsi);
+
+            frame->rax = write(fd, buf, count);
             break;
+        }
+
+        case 12: {
+            // struct brk_ret *brk(size_t length) syscall
+            // rdi -> length in bytes
+            struct brk_ret ret = brk(frame->rdi);
+            frame->rax = reinterpret_cast<uint64_t>(ret.address);
+            frame->rdx = ret.length;
+            break;
+        }
+
+        case 55: {
+            // sleep(uint64_t ticks) syscall
+            // rdi -> ticks to sleep
+            uint64_t ticks = frame->rdi;
+            sleep(ticks);
+            break;
+        }
+
+        case 56: {
+            // uint64_t clone(bool new_process_flag, char *name, uint64_t entry_point, void *arg) syscall,
+            // rdi -> new_process_flag
+            // rsi -> name
+            // rdx -> entry_point
+            // r8 -> arg
+
+            bool new_process_flag = static_cast<bool>(frame->rdi);
+            char *name = reinterpret_cast<char *>(frame->rsi);
+            uint64_t entry_point = frame->rdx;
+            void *arg = reinterpret_cast<void *>(frame->r8);
+
+            frame->rax = clone(new_process_flag, name, entry_point, arg);
+            break;
+        }
+
+        case 60: {
+            // exit() syscall
+            exit();
+            break;
+        }
+
         default:
             frame->rax = static_cast<uint64_t>(-1);
             break;

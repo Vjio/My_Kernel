@@ -1,5 +1,6 @@
 #pragma once
 #include <stdint.h>
+#include "syscall.hpp"
 
 // you will see me use vector and int_no INTERCHANGEABLY
 // this is because os_dev's code snippets uses vector

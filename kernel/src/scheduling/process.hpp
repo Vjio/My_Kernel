@@ -60,7 +60,6 @@ struct thread {
 struct process {
     void* root_page_table;
     struct thread* threads;
-    struct heap_node *heap_start;
     // current end of the process' heap. not keeping this alligned to FRAME_SIZE
     // will lead to undefined behaviour
     uint64_t heap_end;
@@ -106,3 +105,7 @@ struct thread* add_user_thread(struct process* proc, char* name, uint64_t entry_
 // maps a process struct to the current running program
 // will only be used by the kernel to make itself known to the scheduler
 struct process *make_current_execution_process(char* name);
+
+// populates struct with basic information that will be used
+// for building the process' heap and the scheduler
+void populate_kernel_process_struct(struct process *proc);

@@ -113,6 +113,11 @@ extern void (*__init_array_end[])();
 
 // global declaration for flanterm pointer
 struct flanterm_context *ft_ctx = nullptr;
+// this struct is only used to establish the kernel's struct before initializing its heap
+// (so as to circumvent a "chicken and egg" type of problem)
+// if you ever need to interact with the kernel process struct, ask the scheduler for it
+// (scheduler::get_running_thread). do not use this struct!
+struct process kernel_process;
 
 extern "C" void load_tss();
 
@@ -206,8 +211,10 @@ extern "C" void kmain() {
     PIC_disable();
 
     PMM::init_PMM(memmap_request.response, hhdm_request.response->offset);
-    heap_init(hhdm_request.response->offset);
     VMM::init(hhdm_request.response->offset);
+
+    populate_kernel_process_struct(&kernel_process);
+    heap_init(hhdm_request.response->offset, &kernel_process);
 
     if (!setup_acpi(rsdp, hhdm_request.response->offset)) {
         printf("APIC setup failed!\n");
@@ -215,8 +222,6 @@ extern "C" void kmain() {
     }
 
     inb(0x60);
-    
-    printf("Kernel initialized. Enabling interrupts...\n");
 
     // test for dividing by 0
     // volatile int a = 1;
@@ -226,10 +231,17 @@ extern "C" void kmain() {
     // uncomment this for fun
     // trigger_stack_overflow();
 
-    // inits scheduler
+    // inits scheduler per core singleton
     Scheduler::get_current_scheduler();
 
-    printf("Hello world!\n");
+    // create_user_test_process();
+    // Scheduler::get_current_scheduler()->get_running_thread()->thread_sleep(1000);
+
+    // per core things that the kernel will need:
+    // - per core TSS
+    // - per core scheduler
+
+    printf("Kernel initialized! Interrups are now enabled\n");
 
     __asm__ volatile ("sti");
 

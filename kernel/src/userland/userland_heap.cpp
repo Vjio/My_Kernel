@@ -1,10 +1,7 @@
-#include "heap.hpp"
-#include "vmm.hpp"
-#include "pmm.hpp"
-#include "memory.hpp"
+#include "userland_heap.hpp"
+#include "../memory/memory.hpp"
 #include "../stdio.hpp"
-#include "../scheduling/process.hpp"
-#include "../scheduling/scheduler.hpp"
+#include "userland.hpp"
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -12,38 +9,6 @@
 
 // first node in double linked list
 static struct heap_node *heap_start = nullptr;
-
-void heap_init(uint64_t hhdm_offset, struct process *proc) {
-    // heap_init runs in kernel land, thus we can just call VMM and
-    // not go through the lengthier process of a syscall
-    if (proc->is_kernel_process) {
-        heap_start = reinterpret_cast<struct heap_node *>
-            (PMM::alloc_frames(INIT_SIZE / FRAME_SIZE) + hhdm_offset);
-        if (heap_start == 0) {
-            // TODO: rewrite heap to gracefully handle running out of memory
-            // sorry future me for technical debt
-            printf("thread heap init failed!\n");
-            while(true) {;}
-        }
-        proc->heap_end = reinterpret_cast<uint64_t>(heap_start) + (INIT_SIZE / FRAME_SIZE);
-
-    } else {
-        if (!VMM::map_pages(reinterpret_cast<uint64_t *>(proc->root_page_table), HEAP_BASE,
-            INIT_SIZE / FRAME_SIZE, PTE_PRESENT | PTE_READ_WRITE | PTE_USER)) {
-                // TODO: rewrite heap to gracefully handle running out of memory
-                // sorry future me for technical debt
-                printf("thread heap init failed!\n");
-                while(true) {;}
-        }
-        proc->heap_end = HEAP_BASE + INIT_SIZE;
-    }
-
-    heap_start->next = nullptr;
-    heap_start->prev = nullptr;
-    heap_start->status = FREE;
-
-    heap_start->size = INIT_SIZE - sizeof(struct heap_node);
-}
 
 static void split_node(struct heap_node *node, size_t size) {
     // make a new node out of the current's node unused mem
@@ -71,18 +36,11 @@ static void expand_heap(struct heap_node *last_node, size_t requested_size, bool
         requested_size += sizeof(struct heap_node);
     // force a round up
     int pages_to_alloc = (requested_size + FRAME_SIZE - 1) / FRAME_SIZE;
-
-    struct process *proc = Scheduler::get_current_scheduler()->get_running_thread()->parent;
-    if (proc->is_kernel_process) {
-        if (!VMM::map_pages(nullptr, proc->heap_end, pages_to_alloc, PTE_PRESENT | PTE_READ_WRITE | PTE_CACHE_DISABLE)) {
-            // TODO: handle running out of memory gracefully
-            printf("heap expansion failed!\n");
-            while(true) {;}
-        }
-        proc->heap_end += pages_to_alloc * FRAME_SIZE;
-
-    } else {
-        // call brk
+    struct brk_ret ret = sys_brk(pages_to_alloc * FRAME_SIZE);
+    if (ret.address == nullptr) {
+        // TODO: handle brk failng gracefully
+        printf("expand heap failed!\n");
+        while (true) {;}
     }
 
     struct heap_node *new_node;
@@ -98,11 +56,11 @@ static void expand_heap(struct heap_node *last_node, size_t requested_size, bool
             return;
 
         // there was extra space allocated, chop it into a new node
-        new_node = reinterpret_cast<struct heap_node *> (proc->heap_end + requested_size);
+        new_node = reinterpret_cast<struct heap_node *> (ret.address + requested_size);
         offset = requested_size;
     } else {
         // make a new node with all of the space
-        new_node = reinterpret_cast<struct heap_node *> (proc->heap_end);
+        new_node = reinterpret_cast<struct heap_node *> (ret.address);
     }
     // make new node
     new_node->next = nullptr;
@@ -113,7 +71,7 @@ static void expand_heap(struct heap_node *last_node, size_t requested_size, bool
     last_node->next = new_node;
 }
 
-void *malloc(size_t size) {
+void *userland::malloc(size_t size) {
     if (size < MIN_ALLOC_SIZE)
         size = MIN_ALLOC_SIZE;
 
@@ -159,7 +117,7 @@ void *malloc(size_t size) {
             + sizeof(struct heap_node));
 }
 
-void *zalloc(size_t size) {
+void *userland::zalloc(size_t size) {
     void *ptr = malloc(size);
     
     if (ptr != nullptr)
@@ -168,7 +126,7 @@ void *zalloc(size_t size) {
     return ptr;
 }
 
-void *calloc(size_t num, size_t size) {
+void *userland::calloc(size_t num, size_t size) {
     if (num != 0 && size > SIZE_MAX / num)
         return nullptr;
 
@@ -204,7 +162,7 @@ static void try_merge_with_right(struct heap_node *node) {
     }
 }
 
-void free(void *ptr) {
+void userland::free(void *ptr) {
     if (ptr == nullptr)
         return;
 
@@ -226,7 +184,7 @@ void free(void *ptr) {
     try_merge_with_left(node);
 }
 
-void *realloc(void *ptr, size_t size) {
+void *userland::realloc(void *ptr, size_t size) {
     if (ptr == nullptr)
         return malloc(size);
 

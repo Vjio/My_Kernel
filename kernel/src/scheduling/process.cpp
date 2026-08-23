@@ -10,6 +10,7 @@
 #include "../stdio.hpp"
 
 size_t next_free_pid = 0;
+extern struct process kernel_process;
 
 extern "C" uint64_t get_cr3();
 
@@ -54,6 +55,7 @@ struct process *create_process_common(char *name) {
 
     uint64_t pml4_phys = VMM::create_address_space();
     process->root_page_table = reinterpret_cast<void *>(pml4_phys);
+    heap_init(VMM::get_hhdm_offset(), process);
 
     return process;
 }
@@ -158,14 +160,24 @@ static struct thread *make_current_execution_thread(char *name, struct process *
 
 struct process *make_current_execution_process(char* name) {
     struct process* process = reinterpret_cast<struct process*>(malloc(sizeof(struct process)));
-    
-    memcpy(process->name, name, MAX_NAME_LEN);
-    process->pid = next_free_pid++;
+    *process = kernel_process;
 
-    process->root_page_table = reinterpret_cast<void *>(get_cr3());
+    memcpy(process->name, name, MAX_NAME_LEN);
+
     process->threads = make_current_execution_thread("kernel_thread", process);
 
     return process;
+}
+
+void populate_kernel_process_struct(struct process *proc) {
+    proc->root_page_table = reinterpret_cast<void *>(get_cr3() & ~0xFFFull);
+    // heap_end gets set by heap_init()
+    proc->heap_end = 0;
+    proc->threads = nullptr;
+    proc->nr_of_threads = 0;
+    proc->pid = next_free_pid++;
+    proc->lock.locked = false;
+    proc->is_kernel_process = true;
 }
 
 void thread::thread_sleep(uint64_t ticks) {
