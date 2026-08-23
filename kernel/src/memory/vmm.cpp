@@ -41,6 +41,8 @@ uint64_t *VMM::get_page_table_index(uint64_t* table, uint64_t index) {
     if ((table[index] & PTE_PRESENT) == 0) {
         // index hasn't been allocated. ask pmm for a new frame
         uint64_t new_table_phys = PMM::alloc_frame();
+        if (new_table_phys == 0)
+            return nullptr;
 
         // add hhdm offset
         uint64_t *new_table_virt = reinterpret_cast<uint64_t *>(new_table_phys + l_hhdm_offset);
@@ -61,10 +63,12 @@ bool VMM::map_page(uint64_t *pml4, uint64_t virtual_addr, uint64_t physical_addr
         pml4 = VMM::get_pml4();
     pml4 += l_hhdm_offset;
 
+    bool allocated_frame = false;
     if (physical_addr == 0) {
         physical_addr = PMM::alloc_frame();
         if (physical_addr == 0)
             return false;
+        allocated_frame = true;
     }
 
     // extract each index (https://blog.xenoscr.net/resources/images/2021-09-06-Exploring-Virtual-Memory-and-Page-Structures/image-20210831220831378.png)
@@ -74,47 +78,68 @@ bool VMM::map_page(uint64_t *pml4, uint64_t virtual_addr, uint64_t physical_addr
     uint64_t pt_index   = (virtual_addr >> 12) & 0x1FF;
 
     uint64_t *pdpt = get_page_table_index(pml4, pml4_index);
-    uint64_t *pd   = get_page_table_index(pdpt, pdpt_index);
-    uint64_t *pt   = get_page_table_index(pd, pd_index);
+    uint64_t *pd   = pdpt ? get_page_table_index(pdpt, pdpt_index) : nullptr;
+    uint64_t *pt   = pd   ? get_page_table_index(pd, pd_index)     : nullptr;
+
+    if (pt == nullptr) {
+        if (allocated_frame)
+            PMM::free_frame(physical_addr);
+        return false;
+    }
 
     // put phys addr along with flags
     pt[pt_index] = (physical_addr & ~0xFFFull) | flags;
 
     // flush TBL since we just invalidated whatever was at that address
     flush_tlb(virtual_addr);
+    return true;
 }
 
 bool VMM::map_pages(uint64_t *pml4, uint64_t virtual_addr, uint64_t nr_of_pages, uint64_t flags) {
     for (uint64_t i = 0; i < nr_of_pages; i++) {
-        if (!VMM::map_page(pml4, virtual_addr + i * FRAME_SIZE, 0, flags))
+        if (!VMM::map_page(pml4, virtual_addr + i * FRAME_SIZE, 0, flags)) {
+            for (uint64_t j = 0; j < i; j++)
+                VMM::unmap_and_free_page(pml4, virtual_addr + j * FRAME_SIZE);
             return false;
+        }
     }
+    return true;
 }
 
-void VMM::unmap_page(uint64_t *pml4, uint64_t virtual_addr) {
-    if (pml4 == nullptr)
-        pml4 = VMM::get_pml4();
-
+// walks to the PT, clears the entry, and returns the physical frame 
+// that was mapped there (0 if none)
+static uint64_t clear_pte_and_get_phys(uint64_t *pml4, uint64_t virtual_addr) {
     uint64_t pml4_i = (virtual_addr >> 39) & 0x1FF;
     uint64_t pdpt_i = (virtual_addr >> 30) & 0x1FF;
     uint64_t pd_i   = (virtual_addr >> 21) & 0x1FF;
     uint64_t pt_i   = (virtual_addr >> 12) & 0x1FF;
 
     uint64_t *pdpt = peek_table(pml4, pml4_i);
-    if (pdpt == nullptr)
-        return;
-
+    if (pdpt == nullptr) return 0;
     uint64_t *pd = peek_table(pdpt, pdpt_i);
-    if (pd == nullptr)
-        return;
-
+    if (pd == nullptr) return 0;
     uint64_t *pt = peek_table(pd, pd_i);
-    if (pt == nullptr)
-        return;
+    if (pt == nullptr) return 0;
 
+    uint64_t phys = pt[pt_i] & ~0xFFFull;
     pt[pt_i] = 0;
-
     flush_tlb(virtual_addr);
+    return phys;
+}
+
+void VMM::unmap_page(uint64_t *pml4, uint64_t virtual_addr) {
+    if (pml4 == nullptr)
+        pml4 = VMM::get_pml4();
+    clear_pte_and_get_phys(pml4, virtual_addr);
+}
+
+void VMM::unmap_and_free_page(uint64_t *pml4, uint64_t virtual_addr) {
+    if (pml4 == nullptr) 
+        pml4 = VMM::get_pml4();
+
+    uint64_t phys = clear_pte_and_get_phys(pml4, virtual_addr);
+    if (phys != 0)
+        PMM::free_frame(phys);
 }
 
 uint64_t VMM::create_address_space() {

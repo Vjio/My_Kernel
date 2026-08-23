@@ -15,8 +15,10 @@ namespace PMM {
     void init_PMM(struct limine_memmap_response* memmap, uint64_t hhdm_offset);
 
     // allocates 1 frame
+    // returns 0 if allocation failes
     paddr_t alloc_frame();
     // allocates nr frames contiguously
+    // returns 0 if allocation failes
     paddr_t alloc_frames(uint64_t nr);
 
     // deallocates 1 frame
