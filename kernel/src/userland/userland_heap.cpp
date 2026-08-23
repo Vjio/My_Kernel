@@ -56,7 +56,7 @@ static void expand_heap(struct heap_node *last_node, size_t requested_size, bool
             return;
 
         // there was extra space allocated, chop it into a new node
-        new_node = reinterpret_cast<struct heap_node *> (ret.address + requested_size);
+        new_node = reinterpret_cast<struct heap_node *> (reinterpret_cast<uint64_t>(ret.address) + requested_size);
         offset = requested_size;
     } else {
         // make a new node with all of the space
