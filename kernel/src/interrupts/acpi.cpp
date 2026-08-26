@@ -16,6 +16,7 @@
 #define APIC_LVT_TIMER_MODE_PERIODIC    0x20000
 
 volatile uint32_t *g_lapic_virt = 0;
+uint64_t g_ecam_virt = 0;
 uint32_t g_apic_ticks_in_10ms = 0;
 
 static void hardware_enable_lapic() {
@@ -120,39 +121,8 @@ void apic_start_timer() {
     lapic_write(g_lapic_virt, APIC_REGISTER_TIMER_INITCNT, g_apic_ticks_in_10ms);
 }
 
-bool setup_acpi(struct RSDP2 *rsdp, uint64_t hhdm_offset) {
-    // get XSDT from RSDP
-    struct ACPISDTHeader *xsdt = reinterpret_cast<struct ACPISDTHeader *>(rsdp->xsdt_address + hhdm_offset);
-
-    // check if table is valid
-    if (!acpi_validate_checksum(xsdt))
-        return false;
-
-    // the XSDT is followed by pointers to other tables
-    // calculate how many entries that table has
-    int entries = (xsdt->length - sizeof(struct ACPISDTHeader)) / 8;
-
-    // get a pointer to start of array
-    uint64_t *xsdt_entries = reinterpret_cast<uint64_t *>
-        (reinterpret_cast<uint64_t> (xsdt) + sizeof(struct ACPISDTHeader));
-
-    struct MADT *madt = nullptr;
-
-    // loop through array
-    for (int i = 0; i < entries; i++) {
-        struct ACPISDTHeader *curr_entry = reinterpret_cast<struct ACPISDTHeader *>(xsdt_entries[i] + hhdm_offset);
-
-        if (strncmp(curr_entry->signature, "APIC", 4) == 0 ) {
-            if (!acpi_validate_checksum(curr_entry))
-                return false;
-
-            madt = reinterpret_cast<struct MADT *>(curr_entry);
-        }
-    }
-
-    if (madt == nullptr)
-        return false;
-
+// walks the MADT and setups the ioapic
+static void handle_madt(struct MADT *madt, uint64_t hhdm_offset) {
     uint64_t io_apic_phys_addr = 0;
     uint32_t keyboard_gsi = 1;  // default to Pin 1
 
@@ -220,6 +190,76 @@ bool setup_acpi(struct RSDP2 *rsdp, uint64_t hhdm_offset) {
 
     apic_start_timer();
     __asm__ volatile ("sti");
+}
+
+static void handle_mcfg(struct MCFG *mcfg, uint64_t hhdm_offset) {
+    int mcfg_entries = (mcfg->header.length - sizeof(struct MCFG)) / sizeof(struct MCFG_Allocation);
+        
+    for (int i = 0; i < mcfg_entries; i++) {
+        uint64_t ecam_phys = mcfg->allocations[i].base_address;
+        uint8_t start_bus = mcfg->allocations[i].start_bus;
+        uint8_t end_bus = mcfg->allocations[i].end_bus;
+
+        // calculate total size, 1 MB per bus
+        // (end_bus + 1 - start_bus) gives total buses in this allocation
+        uint64_t total_bytes = (end_bus + 1 - start_bus) * 1024 * 1024; 
+        uint64_t ecam_virt = ecam_phys + hhdm_offset;
+
+        for (uint64_t offset = 0; offset < total_bytes; offset += 4096) {
+            if (!VMM::map_page(nullptr, ecam_virt + offset, ecam_phys + offset, 
+                            PTE_PRESENT | PTE_READ_WRITE | PTE_CACHE_DISABLE)) {
+                // this should never happen. no need to write a failure path
+                printf("handle mcfg failed!\n");
+            }
+        }
+        
+        g_ecam_virt = ecam_virt;
+    }
+}
+
+bool setup_acpi(struct RSDP2 *rsdp, uint64_t hhdm_offset) {
+    // get XSDT from RSDP
+    struct ACPISDTHeader *xsdt = reinterpret_cast<struct ACPISDTHeader *>(rsdp->xsdt_address + hhdm_offset);
+
+    // check if table is valid
+    if (!acpi_validate_checksum(xsdt))
+        return false;
+
+    // the XSDT is followed by pointers to other tables
+    // calculate how many entries that table has
+    int entries = (xsdt->length - sizeof(struct ACPISDTHeader)) / 8;
+
+    // get a pointer to start of array
+    uint64_t *xsdt_entries = reinterpret_cast<uint64_t *>
+        (reinterpret_cast<uint64_t> (xsdt) + sizeof(struct ACPISDTHeader));
+
+    struct MADT *madt = nullptr;
+    struct MCFG *mcfg = nullptr;
+
+    // loop through array
+    for (int i = 0; i < entries; i++) {
+        struct ACPISDTHeader *curr_entry = reinterpret_cast<struct ACPISDTHeader *>(xsdt_entries[i] + hhdm_offset);
+
+        if (strncmp(curr_entry->signature, "APIC", 4) == 0 ) {
+            if (!acpi_validate_checksum(curr_entry))
+                return false;
+
+            madt = reinterpret_cast<struct MADT *>(curr_entry);
+        }
+        else if (strncmp(curr_entry->signature, "MCFG", 4) == 0) {
+            if (!acpi_validate_checksum(curr_entry)) 
+                return false;
+            mcfg = reinterpret_cast<struct MCFG *>(curr_entry);
+        }
+    }
+
+    if (madt == nullptr || mcfg == nullptr) {
+        printf("setup acpi failed!\n");
+        return false;
+    }
+
+    handle_madt(madt, hhdm_offset);
+    handle_mcfg(mcfg, hhdm_offset);
 
     return true;
 }

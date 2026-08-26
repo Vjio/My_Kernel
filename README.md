@@ -35,10 +35,10 @@ Implemented so far:
 - interrupt handler (IDT, IRQ stubs)
 - PMM (bitmap), VMM and heap (linked list node allocator)
 - custom MLPQ scheduler (check src/scheduling/README.md for more information on it)
-- threads and processes 
+- threads and processes
+- userland (syscalls)
 
 Working on:
-- userland (syscalls)
 - file system
 - elf loader
 - cli

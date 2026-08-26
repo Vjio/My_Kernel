@@ -65,9 +65,23 @@ struct Record_InterruptOverride {
     uint16_t flags;             // polarity and trigger mode (Edge vs Level)
 } __attribute__((packed));
 
+struct MCFG_Allocation {
+    uint64_t base_address;
+    uint16_t pci_segment_group;
+    uint8_t  start_bus;
+    uint8_t  end_bus;
+    uint32_t reserved;
+} __attribute__((packed));
+
+struct MCFG {
+    struct ACPISDTHeader header;
+    uint64_t reserved;
+    struct MCFG_Allocation allocations[]; 
+} __attribute__((packed));
+
 // helper function for validiaing ACPI checksums
 bool acpi_validate_checksum(ACPISDTHeader* table_header);
-
+// walks the XSDT in the RSDP and maps any needed structs 
 bool setup_acpi(struct RSDP2 *rsdp, uint64_t hhdm_offset);
 void lapic_write(uint32_t volatile *lapic_base, uint32_t reg_offset, uint32_t value);
 void apic_send_eoi();
