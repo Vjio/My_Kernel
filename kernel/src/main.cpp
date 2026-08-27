@@ -18,6 +18,7 @@
 #include "operators.hpp"
 #include "scheduling/process.hpp"
 #include "interrupts/pci.hpp"
+#include "file_system/ahci.hpp"
 
 // Set the base revision to 6, this is recommended as this is the latest
 // base revision described by the Limine boot protocol specification.
@@ -243,7 +244,7 @@ extern "C" void kmain() {
     // - per core scheduler
 
     printf("Kernel initialized! Interrups are now enabled\n");
-    find_ahci_controller(hhdm_request.response->offset);
+    ahci_init(find_ahci_controller(hhdm_request.response->offset), hhdm_request.response->offset);
 
     __asm__ volatile ("sti");
 

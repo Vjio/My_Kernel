@@ -16,6 +16,7 @@
 #define APIC_LVT_TIMER_MODE_PERIODIC    0x20000
 
 volatile uint32_t *g_lapic_virt = 0;
+// ECAM - enhanced configuration access mechaanism 
 uint64_t g_ecam_virt = 0;
 uint32_t g_apic_ticks_in_10ms = 0;
 
