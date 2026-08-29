@@ -57,6 +57,8 @@ class VMM {
     static void unmap_page(uint64_t *pml4, uint64_t virtual_addr);
     // unamps a page and frees the underlying frame
     static void unmap_and_free_page(uint64_t *pml4, uint64_t virtual_addr);
+    // walks the tables and returns the physical address for a virtual address
+    static uint64_t get_physical_address(void *virtual_addr);
 
     static uint64_t create_address_space();
     static void destroy_address_space(void* root_page_table);

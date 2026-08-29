@@ -10,6 +10,10 @@ extern "C" void flush_tlb(uint64_t addr);
 
 static constexpr uint64_t USER_SPACE_TOP = 0x0000800000000000ull;
 
+struct page_indices {
+    uint64_t pml4_i, pdpt_i, pd_i, pt_i;
+};
+
 void VMM::init(uint64_t hhdm_offset) {
     l_hhdm_offset = hhdm_offset;
     kernel_pml4_phys = get_cr3() & ~0xFFFull;
@@ -29,12 +33,34 @@ uint64_t VMM::get_hhdm_offset() {
     return l_hhdm_offset;
 }
 
+static page_indices get_indices(uint64_t vaddr) {
+    return {
+        (vaddr >> 39) & 0x1FF,
+        (vaddr >> 30) & 0x1FF,
+        (vaddr >> 21) & 0x1FF,
+        (vaddr >> 12) & 0x1FF,
+    };
+}
+
 // returns the address of the next table or nullptr if it doesn't exist
 static uint64_t *peek_table(uint64_t *table, uint64_t index) {
     if ((table[index] & PTE_PRESENT) == 0)
         return nullptr;
     uint64_t next_phys = table[index] & ~0xFFFull;
     return reinterpret_cast<uint64_t *>(next_phys + l_hhdm_offset);
+}
+
+// walks pml4 -> pdpt -> pd -> pt (no allocation)
+// returns nullptr if any level along the way is not present
+// does not check pt itself
+static uint64_t *walk_to_pt(uint64_t *pml4, struct page_indices idx) {
+    uint64_t *pdpt = peek_table(pml4, idx.pml4_i);
+    if (!pdpt) 
+        return nullptr;
+    uint64_t *pd = peek_table(pdpt, idx.pdpt_i);
+    if (!pd) 
+        return nullptr;
+    return peek_table(pd, idx.pd_i);
 }
 
 uint64_t *VMM::get_page_table_index(uint64_t* table, uint64_t index) {
@@ -73,14 +99,11 @@ bool VMM::map_page(uint64_t *pml4, uint64_t virtual_addr, uint64_t physical_addr
     }
 
     // extract each index (https://blog.xenoscr.net/resources/images/2021-09-06-Exploring-Virtual-Memory-and-Page-Structures/image-20210831220831378.png)
-    uint64_t pml4_index = (virtual_addr >> 39) & 0x1FF;
-    uint64_t pdpt_index = (virtual_addr >> 30) & 0x1FF;
-    uint64_t pd_index   = (virtual_addr >> 21) & 0x1FF;
-    uint64_t pt_index   = (virtual_addr >> 12) & 0x1FF;
+    struct page_indices idx = get_indices(virtual_addr);
 
-    uint64_t *pdpt = get_page_table_index(pml4, pml4_index);
-    uint64_t *pd   = pdpt ? get_page_table_index(pdpt, pdpt_index) : nullptr;
-    uint64_t *pt   = pd   ? get_page_table_index(pd, pd_index)     : nullptr;
+    uint64_t *pdpt = get_page_table_index(pml4, idx.pml4_i);
+    uint64_t *pd   = pdpt ? get_page_table_index(pdpt, idx.pdpt_i) : nullptr;
+    uint64_t *pt   = pd   ? get_page_table_index(pd, idx.pd_i)     : nullptr;
 
     if (pt == nullptr) {
         if (allocated_frame)
@@ -89,7 +112,7 @@ bool VMM::map_page(uint64_t *pml4, uint64_t virtual_addr, uint64_t physical_addr
     }
 
     // put phys addr along with flags
-    pt[pt_index] = (physical_addr & ~0xFFFull) | flags;
+    pt[idx.pt_i] = (physical_addr & ~0xFFFull) | flags;
 
     // flush TBL since we just invalidated whatever was at that address
     flush_tlb(virtual_addr);
@@ -110,20 +133,13 @@ bool VMM::map_pages(uint64_t *pml4, uint64_t virtual_addr, uint64_t nr_of_pages,
 // walks to the PT, clears the entry, and returns the physical frame 
 // that was mapped there (0 if none)
 static uint64_t clear_pte_and_get_phys(uint64_t *pml4, uint64_t virtual_addr) {
-    uint64_t pml4_i = (virtual_addr >> 39) & 0x1FF;
-    uint64_t pdpt_i = (virtual_addr >> 30) & 0x1FF;
-    uint64_t pd_i   = (virtual_addr >> 21) & 0x1FF;
-    uint64_t pt_i   = (virtual_addr >> 12) & 0x1FF;
+    struct page_indices idx = get_indices(virtual_addr);
 
-    uint64_t *pdpt = peek_table(pml4, pml4_i);
-    if (pdpt == nullptr) return 0;
-    uint64_t *pd = peek_table(pdpt, pdpt_i);
-    if (pd == nullptr) return 0;
-    uint64_t *pt = peek_table(pd, pd_i);
+    uint64_t *pt = walk_to_pt(pml4, idx);
     if (pt == nullptr) return 0;
 
-    uint64_t phys = pt[pt_i] & ~0xFFFull;
-    pt[pt_i] = 0;
+    uint64_t phys = pt[idx.pt_i] & ~0xFFFull;
+    pt[idx.pt_i] = 0;
     flush_tlb(virtual_addr);
     return phys;
 }
@@ -197,29 +213,27 @@ void VMM::free_table(uint64_t table_phys, int level) {
 // true -> valid
 // false -> invalid
 static bool is_user_page_ok(uint64_t vaddr, bool require_write) {
-    uint64_t pml4_i = (vaddr >> 39) & 0x1FF;
-    uint64_t pdpt_i = (vaddr >> 30) & 0x1FF;
-    uint64_t pd_i   = (vaddr >> 21) & 0x1FF;
-    uint64_t pt_i   = (vaddr >> 12) & 0x1FF;
+    struct page_indices idx = get_indices(vaddr);
 
     // caller's own CR3 since syscalls run in the caller's addr space
     uint64_t *pml4 = VMM::get_pml4();
     // start checking tables
-    if ((pml4[pml4_i] & PTE_PRESENT) == 0 || (pml4[pml4_i] & PTE_USER) == 0) 
+    if ((pml4[idx.pml4_i] & PTE_PRESENT) == 0 || (pml4[idx.pml4_i] & PTE_USER) == 0) 
         return false;
 
-    uint64_t *pdpt = peek_table(pml4, pml4_i);
-    if (!pdpt || (pdpt[pdpt_i] & PTE_PRESENT) == 0 || (pdpt[pdpt_i] & PTE_USER) == 0) 
+    uint64_t *pdpt = peek_table(pml4, idx.pml4_i);
+    if (!pdpt || (pdpt[idx.pdpt_i] & PTE_PRESENT) == 0 || (pdpt[idx.pdpt_i] & PTE_USER) == 0) 
         return false;
 
-    uint64_t *pd = peek_table(pdpt, pdpt_i);
-    if (!pd || (pd[pd_i] & PTE_PRESENT) == 0 || (pd[pd_i] & PTE_USER) == 0) 
+    uint64_t *pd = peek_table(pdpt, idx.pdpt_i);
+    if (!pd || (pd[idx.pd_i] & PTE_PRESENT) == 0 || (pd[idx.pd_i] & PTE_USER) == 0) 
         return false;
 
-    uint64_t *pt = peek_table(pd, pd_i);
-    if (!pt) return false;
+    uint64_t *pt = peek_table(pd, idx.pd_i);
+    if (!pt) 
+        return false;
 
-    uint64_t pte = pt[pt_i];
+    uint64_t pte = pt[idx.pt_i];
     if ((pte & PTE_PRESENT) == 0 || (pte & PTE_USER) == 0) 
         return false;
     if (require_write && (pte & PTE_READ_WRITE) == 0)      
@@ -249,4 +263,26 @@ bool VMM::validate_userland_memory(void *address, size_t length, bool require_wr
             return false;
     }
     return true;
+}
+
+uint64_t VMM::get_physical_address(void *addr) {
+    uint64_t virtual_addr = reinterpret_cast<uint64_t>(addr);
+    struct page_indices idx = get_indices(virtual_addr);
+    uint64_t offset = virtual_addr & 0xFFF; 
+
+    uint64_t *pml4 = VMM::get_pml4();
+    if (pml4 == nullptr)
+        return 0;
+
+    uint64_t *pt = walk_to_pt(pml4, idx);
+    if (pt == nullptr) 
+        return 0;
+
+    uint64_t pte = pt[idx.pt_i];
+    if ((pte & PTE_PRESENT) == 0) 
+        return 0;
+
+    // mask out the flags in order to get the actual frame
+    uint64_t phys_frame = pte & ~0xFFFull;
+    return phys_frame + offset;
 }
