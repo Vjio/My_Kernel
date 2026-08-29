@@ -15,6 +15,11 @@ typedef enum {
 	FIS_TYPE_DEV_BITS	= 0xA1,	// Set device bits FIS - device to host
 } FIS_TYPE;
 
+#define ATA_CMD_READ_DMA_EX  0x25
+#define ATA_CMD_WRITE_DMA_EX 0x35
+#define ATA_DEV_BUSY         0x80
+#define ATA_DEV_DRQ          0x08
+
 // Global Host Control flags
 #define HBA_GHC_AE         0x80000000 // AHCI Enable bit (Bit 31)
 
