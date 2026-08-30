@@ -1,4 +1,5 @@
 #include "ahci.hpp"
+#include "drive.hpp"
 #include "stdio.hpp"
 #include "../memory/memory.hpp"
 #include "../memory/pmm.hpp"
@@ -8,8 +9,6 @@
 #define HBA_PxCMD_FR            0x4000
 #define HBA_PxCMD_CR            0x8000
 #define DEFAULT_PRDT_ENTRIES    8
-
-HBA_PORT *sata_port;
 
 static void ahci_stop_cmd(HBA_PORT *port) {
     // clear start and fre (FIS Receive Enable)
@@ -102,7 +101,7 @@ void ahci_init(uint64_t abar_address, uint64_t hhdm_offset) {
                 printf("found SATA\n");
                 ahci_port_rebase(&abar->ports[i], hhdm_offset);
                 
-                sata_port = &abar->ports[i];
+                SATADrive *drive = new SATADrive(&abar->ports[i], i, hhdm_offset);
                 return;
             }
         }

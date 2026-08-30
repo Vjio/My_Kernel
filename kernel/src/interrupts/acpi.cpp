@@ -15,7 +15,8 @@
 #define APIC_LVT_INT_MASKED             0x10000
 #define APIC_LVT_TIMER_MODE_PERIODIC    0x20000
 
-volatile uint32_t *g_lapic_virt = 0;
+static volatile uint32_t *g_lapic_virt = nullptr;
+static volatile uint32_t *g_ioapic_virt = nullptr;
 // ECAM - enhanced configuration access mechaanism 
 uint64_t g_ecam_virt = 0;
 uint32_t g_apic_ticks_in_10ms = 0;
@@ -162,6 +163,7 @@ static void handle_madt(struct MADT *madt, uint64_t hhdm_offset) {
     volatile uint32_t* lapic_virt = reinterpret_cast<volatile uint32_t*>(madt->local_apic_address + hhdm_offset);
     volatile uint32_t* io_apic_virt = reinterpret_cast<volatile uint32_t*>(io_apic_phys_addr + hhdm_offset);
     g_lapic_virt = lapic_virt;
+    g_ioapic_virt = io_apic_virt;
 
     VMM::map_page(nullptr, reinterpret_cast<uint64_t>(lapic_virt),
         static_cast<uint64_t>(madt->local_apic_address),
