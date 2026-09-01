@@ -192,3 +192,13 @@ void thread::thread_sleep(uint64_t ticks) {
         asm volatile("hlt");
     }
 }
+
+void thread::put_thread_into_waiting() {
+    status = WAITING;
+    while(status == WAITING);
+}
+
+void thread::take_thread_out_of_waiting() {
+    ready_time = Scheduler::get_current_scheduler()->get_interrupt_nr();
+    status = READY;
+}

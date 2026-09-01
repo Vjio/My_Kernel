@@ -50,11 +50,15 @@ struct thread {
     void *kernel_stack;
 
     bool is_starving(uint64_t interrupt_nr) {
+        if (status != READY)
+            return false;
         return interrupt_nr - ready_time >= STARVING_TIME;
     }
 
     void thread_sleep(uint64_t ticks);
     void thread_exit();
+    void put_thread_into_waiting();
+    void take_thread_out_of_waiting();
 };
 
 struct process {
