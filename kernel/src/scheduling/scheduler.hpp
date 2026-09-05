@@ -8,10 +8,11 @@
 // each CPU will eventually have their own scheduler
 // this is to avoid having costly locks on the internal thread queues
 #define MAX_CPUS 4
-#define DEFAULT_LEVEL   7
-#define MAX_DYNAMIC_LEVEL 7   // 8th queue — highest level reachable by promotion
-#define REALTIME_LOW  8       // 9th queue — fixed, never promotes/demotes
-#define REALTIME_HIGH 9       // 10th queue — fixed, never promotes/demotes
+#define LOWEST_LEVEL        1
+#define DEFAULT_LEVEL       7
+#define MAX_DYNAMIC_LEVEL   7    // 8th queue — highest level reachable by promotion
+#define REALTIME_LOW        8    // 9th queue — fixed, never promotes/demotes
+#define REALTIME_HIGH       9    // 10th queue — fixed, never promotes/demotes
 
 // singleton object that handles schedulling for a core
 class Scheduler {

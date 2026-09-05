@@ -3,6 +3,7 @@
 #include "memory/vmm.hpp"
 #include "gdt.hpp"
 #include "interrupts/tss.hpp"
+#include "../stdio.hpp"
 
 #define PROMOTE_THRESHOLD_PCT 40
 
@@ -21,7 +22,7 @@ Scheduler::Scheduler(char *name) {
     g_schedulers[get_current_cpu_id()] = this;
     Scheduler::interrupt_nr = 0;
     running_thread = make_current_execution_process(name)->threads;
-    Scheduler::dummy = add_kernel_thread(running_thread->parent, "dummy", dummy_work, nullptr);
+    Scheduler::dummy = add_kernel_thread(running_thread->parent, "dummy", dummy_work, nullptr, LOWEST_LEVEL);
 }
 
 Scheduler *Scheduler::get_current_scheduler() {
@@ -160,6 +161,8 @@ struct thread *Scheduler::find_next_task() {
             continue;
         
         struct thread *next_task = queue[i].extract_ready_thread();
+        if (next_task == nullptr)
+            continue;
         next_task->status = RUNNING;
         next_task->ttl = BASE_INTERRUPT_NR;
         return next_task;
@@ -208,6 +211,7 @@ void Scheduler::reinsert() {
 // dummy function. only use for spawning dummy process
 // so that the scheduler will always have at least 1 thread to run
 void dummy_work(void *) {
+    printf("I'm a dummy!\n");
     while (true)
         asm("hlt");
 }

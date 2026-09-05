@@ -62,7 +62,7 @@ struct process *create_process_common(char *name) {
 struct process *create_kernel_process(char* name, void(*function)(void*), void* arg) {
     struct process* process = create_process_common(name);
 
-    add_kernel_thread(process, name, function, arg);
+    add_kernel_thread(process, name, function, arg, DEFAULT_LEVEL);
     process->is_kernel_process = true;
     heap_init(VMM::get_hhdm_offset(), process);
 
@@ -79,7 +79,7 @@ struct process *create_user_process(char *name, uint64_t entry_point, void *arg)
     return process;
 }
 
-struct thread *add_kernel_thread(struct process *proc, char *name, void(*function)(void*), void *arg) {
+struct thread *add_kernel_thread(struct process *proc, char *name, void(*function)(void*), void *arg, unsigned int base_level) {
     if (proc == nullptr) {
         proc = create_kernel_process(name, function, arg);
         return proc->threads;
@@ -92,6 +92,10 @@ struct thread *add_kernel_thread(struct process *proc, char *name, void(*functio
     thread->int_frame.ss = GDT_KERNEL_DATA;
     thread->int_frame.rip = (uint64_t)function;
     thread->int_frame.rdi = (uint64_t)arg;
+    if (base_level > REALTIME_HIGH)
+        base_level = REALTIME_HIGH;
+    thread->base_level = base_level;
+    thread->current_level = base_level;
 
     // kernel threads never change privilege level, so they only ever need one stack
     void* stack = malloc(STACK_SIZE);
@@ -160,8 +164,7 @@ static struct thread *make_current_execution_thread(char *name, struct process *
 }
 
 struct process *make_current_execution_process(char* name) {
-    struct process* process = reinterpret_cast<struct process*>(malloc(sizeof(struct process)));
-    *process = kernel_process;
+    struct process* process = &kernel_process;
 
     memcpy(process->name, name, MAX_NAME_LEN);
 
@@ -194,11 +197,13 @@ void thread::thread_sleep(uint64_t ticks) {
 }
 
 void thread::put_thread_into_waiting() {
+    printf("PUT THREAD INTO WAITING\n");
     status = WAITING;
     while(status == WAITING);
 }
 
 void thread::take_thread_out_of_waiting() {
+    printf("TAKE THREAD OUT OF WAITING\n");
     ready_time = Scheduler::get_current_scheduler()->get_interrupt_nr();
     status = READY;
 }

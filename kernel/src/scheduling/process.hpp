@@ -100,7 +100,8 @@ struct process *create_user_process(char *name, uint64_t entry_point, void *arg)
 // used by kernel. exposing this function to userspace will lead to creashes
 // creates a thread and notifies the scheduler about it
 // set proc to nullptr if you want to make a new process for the thread
-struct thread* add_kernel_thread(struct process* proc, char* name, void(*function)(void*), void* arg);
+struct thread* add_kernel_thread(struct process* proc, char* name, void(*function)(void*), void* arg,
+                                    unsigned int base_level);
 
 // creates a thread for a userpsace process and notifies the scheduler about it
 // set proc to nullptr if you want to make a new process for the thread
