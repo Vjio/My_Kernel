@@ -74,6 +74,7 @@ static void expand_heap(struct heap_node *last_node, size_t requested_size, bool
     int pages_to_alloc = (requested_size + FRAME_SIZE - 1) / FRAME_SIZE;
 
     struct process *proc = Scheduler::get_current_scheduler()->get_running_thread()->parent;
+    uint64_t old_heap_end = proc->heap_end;
     if (proc->is_kernel_process) {
         if (!VMM::map_pages(nullptr, proc->heap_end, pages_to_alloc, PTE_PRESENT | PTE_READ_WRITE | PTE_CACHE_DISABLE)) {
             // TODO: handle running out of memory gracefully
@@ -99,11 +100,11 @@ static void expand_heap(struct heap_node *last_node, size_t requested_size, bool
             return;
 
         // there was extra space allocated, chop it into a new node
-        new_node = reinterpret_cast<struct heap_node *> (proc->heap_end + requested_size);
+        new_node = reinterpret_cast<struct heap_node *> (old_heap_end + requested_size);
         offset = requested_size;
     } else {
         // make a new node with all of the space
-        new_node = reinterpret_cast<struct heap_node *> (proc->heap_end);
+        new_node = reinterpret_cast<struct heap_node *> (old_heap_end);
     }
     // make new node
     new_node->next = nullptr;
