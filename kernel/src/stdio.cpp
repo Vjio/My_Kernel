@@ -2,6 +2,7 @@
 #include <cstdarg>
 #include "flanterm/flanterm.h"
 #include "flanterm/flanterm_backends/fb.h"
+#include "serial.hpp"
 
 enum printf_state {
     STATE_NORMAL,
@@ -22,6 +23,10 @@ enum printf_length {
 extern struct flanterm_context *ft_ctx;
 
 void putc(char c) {
+    if (c == '\n')
+        serial_putc('\r');
+    serial_putc(c);
+
     if (ft_ctx != nullptr) {
         // intercept \n
         if (c == '\n') {
@@ -141,8 +146,12 @@ void printf(const char* fmt, ...) {
                                 break;
 
                     case 'X':
-                    case 'x':
+                    case 'x':   radix = 16; sign = false; number = true;
+                                break;
+
                     case 'p':   radix = 16; sign = false; number = true;
+                                length = LENGTH_LONG_LONG;
+                                putc('0'); putc('x');
                                 break;
 
                     case 'o':   radix = 8; sign = false; number = true;
