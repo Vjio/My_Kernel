@@ -80,6 +80,9 @@ void printf(const char* fmt, ...) {
     va_list args;
     va_start(args, fmt);
 
+    uint64_t flags;
+    __asm__ volatile("pushfq; pop %0; cli" : "=r"(flags));
+
     enum printf_state state = STATE_NORMAL;
     enum printf_length length = LENGTH_DEFAULT;
     int radix = 10;
@@ -202,6 +205,8 @@ void printf(const char* fmt, ...) {
 
         fmt++;
     }
-
+    
     va_end(args);
+    if (flags & (1u << 9))
+        __asm__ volatile("sti");
 }

@@ -2,6 +2,7 @@
 #include "acpi.hpp"
 #include "stdio.hpp"
 #include "../memory/vmm.hpp"
+#include "../file_system/drive.hpp"
 
 extern uint64_t g_ecam_virt;
 
@@ -15,7 +16,7 @@ uint64_t find_ahci_controller(uint64_t hhdm_offset) {
         for (int device = 0; device < 32; device++) {
             for (int function = 0; function < 8; function++) {
                 struct PCI_Header* pci_dev = get_pci_device(bus, device, function);
-                
+
                 // 0xFFFF means no device is connected to this BDF
                 if (pci_dev->vendor_id == 0xFFFF) {
                     continue; 
@@ -25,12 +26,12 @@ uint64_t find_ahci_controller(uint64_t hhdm_offset) {
                 if (pci_dev->class_code == 0x01 && 
                     pci_dev->subclass == 0x06 && 
                     pci_dev->prog_if == 0x01) {
-                    
+
                     printf("AHCI Controller found at %d:%d:%d\n", bus, device, function);
 
                     // BAR5 contains the physical memory address of the AHCI registers
                     uint32_t abar_phys = pci_dev->bar5;
-                    
+
                     // clear the low 4 bits (they are status flags, not part of the address)
                     abar_phys &= 0xFFFFFFF0;
 
@@ -39,7 +40,11 @@ uint64_t find_ahci_controller(uint64_t hhdm_offset) {
                     uint64_t abar_virt = abar_phys + hhdm_offset;
                     VMM::map_page(nullptr, abar_virt, abar_phys, 
                                   PTE_PRESENT | PTE_READ_WRITE | PTE_CACHE_DISABLE);
-                    
+
+                    // store interrupt line in driver class
+                    Drive::interrupt_line = pci_dev->interrupt_line;
+                    ioapic_route_irq(Drive::interrupt_line, SOFTWARE_EXCEPTION_NR + Drive::interrupt_line, true, true);
+                    // return address of controller header
                     return abar_virt;
                 }
             }

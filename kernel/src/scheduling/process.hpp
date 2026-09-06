@@ -57,7 +57,9 @@ struct thread {
 
     void thread_sleep(uint64_t ticks);
     void thread_exit();
-    void put_thread_into_waiting();
+    // you MUST put the tread into waiting yourself before calling this function.
+    // failling to do so will make this function not do ANYTHING
+    void wait_until_taken_out_of_waiting();
     void take_thread_out_of_waiting();
 };
 

@@ -5,6 +5,7 @@
 #include "acpi.hpp"
 #include "scheduling/scheduler.hpp"
 #include "gdt.hpp"
+#include "../file_system/drive.hpp"
 
 // you will notice a lot of "manually" written large arrays of data.
 // there were smarter ways to do this. i just asked ai to generate them for me
@@ -89,6 +90,13 @@ extern "C" void exception_handler(exception_frame* frame) {
         serial_print("\n");
         for (;;) __asm__ volatile ("hlt");
     }
+    
+    if (frame->int_no == 14) {
+        uint64_t cr2;
+        __asm__ volatile("mov %%cr2, %0" : "=r"(cr2));
+        printf("Page fault at CR2=0x%lx (RIP=0x%lx, ERR=0x%lx)\n",
+               cr2, frame->rip, frame->error_code);
+    }
 
     printf("EXCEPTION %s!\n", exception_names[frame->int_no]);
 
@@ -107,13 +115,19 @@ extern "C" void exception_handler(exception_frame* frame) {
 extern "C" void irq_handler(interrupt_frame *frame) {
     int irq = frame->int_no - SOFTWARE_EXCEPTION_NR;
 
+    if (irq != 0)
+        printf("received irq %d\n", irq);
     if (irq == 0) { // timer interrupt
         Scheduler::get_current_scheduler()->schedule(frame);
     }
-
-    if (irq == 1) { // keyboard
+    
+    else if (irq == 1) { // keyboard
         uint8_t scancode = inb(0x60);
         printf("Keyboard interrupt! scancode=0x%x\n", scancode);
+    }
+
+    else if (irq == Drive::interrupt_line) {
+        hard_drive_handle_interrupt(frame);
     }
 
     apic_send_eoi(); 

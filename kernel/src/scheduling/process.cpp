@@ -196,9 +196,8 @@ void thread::thread_sleep(uint64_t ticks) {
     }
 }
 
-void thread::put_thread_into_waiting() {
+void thread::wait_until_taken_out_of_waiting() {
     printf("PUT THREAD INTO WAITING\n");
-    status = WAITING;
     while(status == WAITING);
 }
 

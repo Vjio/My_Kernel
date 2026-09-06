@@ -15,13 +15,24 @@ typedef enum {
 	FIS_TYPE_DEV_BITS	= 0xA1,	// Set device bits FIS - device to host
 } FIS_TYPE;
 
-#define ATA_CMD_READ_DMA_EX  0x25
-#define ATA_CMD_WRITE_DMA_EX 0x35
-#define ATA_DEV_BUSY         0x80
-#define ATA_DEV_DRQ          0x08
+#define AHCI_PROBE_COUNT	 32
+
+#define HBA_PxIS_TFES  		(1u << 30)
+#define HBA_PxIS_HBFS 		(1u << 29)
+#define HBA_PxIS_HBDS  		(1u << 28)
+#define HBA_PxIS_IFS   		(1u << 27)
+#define HBA_PxIS_INFS  		(1u << 26)
+#define HBA_PxIS_ERR_MASK 	(HBA_PxIS_TFES | HBA_PxIS_HBFS | HBA_PxIS_HBDS | HBA_PxIS_IFS)
+
+#define ATA_CMD_READ_DMA_EX  	0x25
+#define ATA_CMD_WRITE_DMA_EX 	0x35
+#define ATA_CMD_IDENTIFY_DEVICE 0xEC
+#define ATA_DEV_BUSY         	0x80
+#define ATA_DEV_DRQ          	0x08
 
 // Global Host Control flags
 #define HBA_GHC_AE         0x80000000 // AHCI Enable bit (Bit 31)
+#define HBA_GHC_IE         0x00000002 // Interrupt Enable bit (Bit 1)
 
 // SATA Status flags
 #define HBA_PORT_DET_PRESENT 3
@@ -31,6 +42,12 @@ typedef enum {
 #define AHCI_DEV_SATAPI    0xEB140101 // SATA CD-ROM (ATAPI)
 #define AHCI_DEV_SEMB      0xC33C0101 // Enclosure management bridge
 #define AHCI_DEV_PM        0x96690101 // Port multiplier
+
+// Port interrupt enable/status bits for a non-NCQ driver
+// PxIE has the same bit layout as PxIS so these will work as PxIS test masks too
+#define HBA_PxIE_DHRE      (1u << 0)  // Device to Host Register FIS Interrupt Enable
+#define HBA_PxIS_DHRS      (1u << 0)  // Device to Host Register FIS Interrupt Status
+#define HBA_PxIE_ENABLE_MASK (HBA_PxIE_DHRE | HBA_PxIS_ERR_MASK)
 
 // H2D == HostToDevice
 typedef struct tagFIS_REG_H2D {
@@ -233,22 +250,38 @@ typedef struct tagHBA_CMD_HEADER {
 
 // registers for a SATA port
 typedef struct tagHBA_PORT {
+	volatile
     uint32_t clb;           // 0x00, command list base address, 1K-byte aligned
+	volatile
     uint32_t clbu;          // 0x04, command list base address upper 32 bits
+	volatile
     uint32_t fb;            // 0x08, FIS receive base address, 256-byte aligned
+	volatile
     uint32_t fbu;           // 0x0C, FIS receive base address upper 32 bits
+	volatile
     uint32_t is;            // 0x10, interrupt status
+	volatile
     uint32_t ie;            // 0x14, interrupt enable
+	volatile
     uint32_t cmd;           // 0x18, command and status
     uint32_t rsv0;          // 0x1C, Reserved
+	volatile
     uint32_t tfd;           // 0x20, task file data
+	volatile
     uint32_t sig;           // 0x24, signature
+	volatile
     uint32_t ssts;          // 0x28, SATA status (SCR0:SStatus)
+	volatile
     uint32_t sctl;          // 0x2C, SATA control (SCR2:SControl)
+	volatile
     uint32_t serr;          // 0x30, SATA error (SCR1:SError)
+	volatile
     uint32_t sact;          // 0x34, SATA active (SCR3:SActive)
+	volatile
     uint32_t ci;            // 0x38, command issue
+	volatile
     uint32_t sntf;          // 0x3C, SATA notification (SCR4:SNotification)
+	volatile
     uint32_t fbs;           // 0x40, FIS-based switch control
     uint32_t rsv1[11];      // 0x44 ~ 0x6F, Reserved
     uint32_t vendor[4];     // 0x70 ~ 0x7F, vendor specific
@@ -281,27 +314,41 @@ typedef struct tagHBA_FIS {
 // main AHCI controller memory layout
 typedef struct tagHBA_MEM {
     // 0x00 - 0x2B, Generic Host Control
+	volatile
     uint32_t cap;           // 0x00, Host capability
+	volatile
     uint32_t ghc;           // 0x04, Global host control
+	volatile
     uint32_t is;            // 0x08, Interrupt status
+	volatile
     uint32_t pi;            // 0x0C, Port implemented
+	volatile
     uint32_t vs;            // 0x10, Version
+	volatile
     uint32_t ccc_ctl;       // 0x14, Command completion coalescing control
+	volatile
     uint32_t ccc_pts;       // 0x18, Command completion coalescing ports
+	volatile
     uint32_t em_loc;        // 0x1C, Enclosure management location
+	volatile
     uint32_t em_ctl;        // 0x20, Enclosure management control
+	volatile
     uint32_t cap2;          // 0x24, Host capabilities extended
+	volatile
     uint32_t bohc;          // 0x28, BIOS/OS handoff control and status
-    
+
     // 0x2C - 0x9F, Reserved
     uint8_t  rsv[116];
-    
+
     // 0xA0 - 0xFF, Vendor specific registers
     uint8_t  vendor[96];
-    
+
     // 0x100 - 0x10FF, Port control registers
     HBA_PORT ports[32]; // 1 ~ 32
 } __attribute__((packed)) HBA_MEM;
 
-// enables AHCI and searches for a SATA type device
+// enables AHCI and sets up any existing SATA drives
 void ahci_init(uint64_t abar_address, uint64_t hhdm_offset);
+void reset_port(HBA_PORT *port);
+void ahci_pause_cmd(HBA_PORT *port);
+void ahci_resume_cmd(HBA_PORT *port);

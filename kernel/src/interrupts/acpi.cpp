@@ -63,14 +63,26 @@ uint32_t get_current_cpu_id() {
     return lapic_read(g_lapic_virt, 0x20) >> 24;
 }
 
-static void cpu_write_IO_Apic(volatile uint32_t* io_apic_base, uint32_t reg, uint32_t value) {
+void cpu_write_IO_Apic(volatile uint32_t* io_apic_base, uint32_t reg, uint32_t value) {
    io_apic_base[0] = (reg & 0xff);
    io_apic_base[4] = value;
 }
 
-static uint32_t cpu_read_IO_apic(volatile uint32_t* io_apic_base, uint32_t reg) {
+uint32_t cpu_read_IO_apic(volatile uint32_t* io_apic_base, uint32_t reg) {
    io_apic_base[0] = (reg & 0xff);
    return io_apic_base[4];
+}
+
+void ioapic_route_irq(uint32_t gsi, uint8_t vector, bool level_triggered, bool active_low) {
+    uint32_t low_index  = 0x10 + (2 * gsi);
+    uint32_t high_index = low_index + 1;
+
+    uint32_t low = vector;
+    if (active_low)      low |= (1 << 13);
+    if (level_triggered) low |= (1 << 15);
+
+    cpu_write_IO_Apic(g_ioapic_virt, high_index, 0 << 24);
+    cpu_write_IO_Apic(g_ioapic_virt, low_index, low);
 }
 
 void pit_prepare_sleep(uint32_t microseconds) {
@@ -181,15 +193,7 @@ static void handle_madt(struct MADT *madt, uint64_t hhdm_offset) {
     lapic_write(lapic_virt, 0xF0, sivr);
 
     // program the Redirection Table Entry for the Keyboard
-    uint32_t target_vector = 33; // vector 33 (IRQ 1 mapped to 32+1)
-    uint32_t low_index = 0x10 + (2 * keyboard_gsi);
-    uint32_t high_index = low_index + 1;
-
-    // write target destination (Core 0 APIC ID) to high 32 bits
-    cpu_write_IO_Apic(io_apic_virt, high_index, 0 << 24);
-
-    // write vector configuration and unmask to low 32 bits
-    cpu_write_IO_Apic(io_apic_virt, low_index, target_vector);
+    ioapic_route_irq(keyboard_gsi, 33, false, false);
 
     apic_start_timer();
     __asm__ volatile ("sti");
