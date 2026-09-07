@@ -101,6 +101,9 @@ bool SATADrive::send_command(int slot, uint8_t command, uint64_t lba,
         cmd_header->prdtl = 0;
     }
 
+    uint64_t flags;
+    __asm__ volatile("pushfq; pop %0; cli" : "=r"(flags));
+
     struct thread *thread = Scheduler::get_current_scheduler()->get_running_thread();
     command_slots[slot].issued          = true;
     command_slots[slot].done            = false;
@@ -111,10 +114,13 @@ bool SATADrive::send_command(int slot, uint8_t command, uint64_t lba,
     // issue command
     port->ci |= (1u << slot);
 
+    if (flags & (1u << 9))
+        __asm__ volatile("sti");
+
     // fast AHCI command completion could mean the command finishes even before this function
     // gets called. thus, you have to make sure the thread is set to waiting
     // BEFORE issuing the command
-    command_slots[slot].waiting_thread->wait_until_taken_out_of_waiting();
+    thread->wait_until_taken_out_of_waiting();
 
     return !command_slots[slot].failure;
 }

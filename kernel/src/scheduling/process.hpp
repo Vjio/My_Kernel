@@ -24,7 +24,7 @@ struct process;
 struct thread {
     struct interrupt_frame int_frame;
     size_t tid;
-    status_t status;
+    volatile status_t status;
     char name[MAX_NAME_LEN];
     // pointer to next thread inside scheduler queue
     struct thread *next;
