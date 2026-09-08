@@ -42,13 +42,14 @@ Working on:
 - file system
 - elf loader
 - cli
+- SMP
 
 ## Acknowledgements
 
-This project wouldn't be possible without the resources and tools below:
+This project wouldn't be possible without the resources and tools listed below:
 
 - [**Limine**](https://github.com/limine-bootloader/limine) by Mintsuki and contributors, for the bootloader and the C/C++ bare-bones template this kernel was built from.
 - [**Flanterm**](https://github.com/mintsuki/flanterm) by Mintsuki and contributors, for framebuffer terminal handling.
 - [**OSDev Wiki**](https://wiki.osdev.org/), great condensed reference for just about every topic I needed for OS development.
-- **Operating Systems: Three Easy Pieces** (OSTEP) by Remzi and Andrea Arpaci-Dusseau, for clear, intuitive explanations of core OS concepts.
-- **Modern Operating Systems** by Andrew S. Tanenbaum, for deep, foundational coverage of operating system theory and design.
+- **Operating Systems: Three Easy Pieces** (OSTEP) by Remzi and Andrea Arpaci-Dusseau, for intuitive explanations of core OS concepts.
+- **Modern Operating Systems** by Andrew S. Tanenbaum, for deep coverage of operating system theory and design.
