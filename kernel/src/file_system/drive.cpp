@@ -296,3 +296,11 @@ void SATADrive::identify() {
     sector_size = sector_sz;
     release_slot(slot);
 }
+
+void Drive::zero_out_drive() {
+    uint8_t buf[sector_size];
+    memset(buf, 0, sector_size);
+
+    for(uint64_t i = 0; i < sectors_nr; i++)
+        write_sectors(i, 1, buf);
+}

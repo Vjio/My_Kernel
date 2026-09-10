@@ -31,8 +31,14 @@ public:
         hhdm_offset(hhdm_offset) { lock.locked = false; }
     virtual ~Drive() = default;
 
+    // lba   - sector to start from
+    // count - the number of sectors to read
     virtual bool read_sectors(uint64_t lba, uint32_t count, void* buffer) = 0;
+    // lba   - sector to start from
+    // count - the number of sectors to write
     virtual bool write_sectors(uint64_t lba, uint32_t count, void* buffer) = 0;
+    // beware, very inneficient helper!
+    void zero_out_drive();
 
     uint64_t get_capacity_bytes() { return sectors_nr * sector_size; }
     uint32_t get_sector_size() { return sector_size; }
