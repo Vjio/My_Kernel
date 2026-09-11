@@ -14,7 +14,7 @@ namespace {
     // index of the first byte with at least 1 free frame (at least 1 bit set to 0)
     // convention, if first_free_frame was set to a OXFF byte, that means there are no free frames
     inline static uint64_t first_free_frame = 0;
-    
+
     // internal bitmap manipulation
     // bit = frame_index % 8
     // index = frame_index / 8

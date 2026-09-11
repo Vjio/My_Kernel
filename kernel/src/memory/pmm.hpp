@@ -4,11 +4,10 @@
 #include <limine.h>
 #include "../locking/lock.h"
 
-#define FRAME_SIZE   4096
+#define FRAME_SIZE   4 * 1024
 
 typedef unsigned long paddr_t;
 
-// TODO: add synchronization primitives once multi thread support is implemented 
 namespace PMM {
     // inits internal PMM structures
     // does nothing if PMM has already been init
