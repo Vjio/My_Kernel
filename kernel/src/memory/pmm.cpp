@@ -1,5 +1,6 @@
 #include "pmm.hpp"
 #include "../stdio.hpp"
+#include "../bitmap.hpp"
 
 #define FRAME_USED      1
 #define FRAME_UNUSED    0
@@ -14,23 +15,6 @@ namespace {
     // index of the first byte with at least 1 free frame (at least 1 bit set to 0)
     // convention, if first_free_frame was set to a OXFF byte, that means there are no free frames
     inline static uint64_t first_free_frame = 0;
-
-    // internal bitmap manipulation
-    // bit = frame_index % 8
-    // index = frame_index / 8
-
-    // set bit to used
-    void set_bit(uint64_t frame_index) {
-        bitmap[frame_index / 8] |= (1 << (frame_index % 8));
-    }
-    void clear_bit(uint64_t frame_index) {
-        bitmap[frame_index / 8] &= ~(1 << (frame_index % 8));
-    }
-    // returns true if bit is used
-    // returns false if bit is unused
-    bool test_bit(uint64_t frame_index) {
-        return bitmap[frame_index / 8] & (1 << (frame_index % 8));
-    }
 }
 
 void PMM::init_PMM(struct limine_memmap_response* memmap, uint64_t hhdm_offset) {
@@ -86,7 +70,7 @@ void PMM::init_PMM(struct limine_memmap_response* memmap, uint64_t hhdm_offset) 
                 uint64_t frame_index = physical_addr / 4096;
 
                 // set corresponding bit to 0
-                clear_bit(frame_index);
+                clear_bit(bitmap, frame_index);
                 nr_free_frames++;
             }
         }
@@ -97,7 +81,7 @@ void PMM::init_PMM(struct limine_memmap_response* memmap, uint64_t hhdm_offset) 
         uint64_t physical_addr = bitmap_physical_base + offset;
         uint64_t frame_index = physical_addr / 4096;
 
-        set_bit(frame_index);
+        set_bit(bitmap, frame_index);
         nr_free_frames--;
     }
 
@@ -122,9 +106,9 @@ paddr_t PMM::alloc_frame() {
     uint8_t bit = 0;
     for (uint8_t i = 0; i < 8; i++) {
         uint64_t current_bit = (first_free_frame * 8) + i;
-        if (!test_bit(current_bit)) {
+        if (!test_bit(bitmap, current_bit)) {
             bit = i;
-            set_bit(current_bit);
+            set_bit(bitmap, current_bit);
             nr_free_frames--;
             break;
         }
@@ -186,7 +170,7 @@ paddr_t PMM::alloc_frames(uint64_t nr) {
     for (; index < bit_map_size; index++) {
         for (uint8_t bit = 0; bit < 8; bit++) {
             uint64_t current_bit = (index * 8) + bit;
-            if (!test_bit(current_bit)) {
+            if (!test_bit(bitmap, current_bit)) {
                 // current bit is unused
                 if (sum == 0) {
                     // start new sum
@@ -212,7 +196,7 @@ paddr_t PMM::alloc_frames(uint64_t nr) {
         for (index = 0; index < first_free_frame; index++) {
             for (uint8_t bit = 0; bit < 8; bit++) {
                 uint64_t current_bit = (index * 8) + bit;
-                if (!test_bit(current_bit)) {
+                if (!test_bit(bitmap, current_bit)) {
                     // current bit is unused
                     if (sum == 0) {
                         // start new sum
@@ -245,7 +229,7 @@ paddr_t PMM::alloc_frames(uint64_t nr) {
     index = result_index;
     uint64_t temp_bit = result_bit;
     while (nr) {
-        set_bit(index * 8 + temp_bit);
+        set_bit(bitmap, index * 8 + temp_bit);
         temp_bit++;
         if (temp_bit > 7) {
             temp_bit = 0;
@@ -295,7 +279,7 @@ void PMM::free_frame(paddr_t address) {
     
     acquire(&lock);
     // if the bit is already 0, the frame is already free
-    if (test_bit(frame_index) == 0) {
+    if (test_bit(bitmap, frame_index) == 0) {
         release(&lock);
         // could add a log here for this
         // it shouldn't really happen
@@ -303,7 +287,7 @@ void PMM::free_frame(paddr_t address) {
     }
 
     // free the frame
-    clear_bit(frame_index);
+    clear_bit(bitmap, frame_index);
     nr_free_frames++;
 
     // if we just freed a frame in a byte that is lower than our current starting search index,
@@ -321,7 +305,7 @@ void PMM::free_frames(paddr_t address, uint64_t nr) {
     
     acquire(&lock);
     // if the bit is already 0, the frame is already free
-    if (test_bit(frame_index) == 0) {
+    if (test_bit(bitmap, frame_index) == 0) {
         release(&lock);
         // could add a log here for this
         // it shouldn't really happen
@@ -337,7 +321,7 @@ void PMM::free_frames(paddr_t address, uint64_t nr) {
     // start freeing all the frames
     while (nr) {
         frame_index = index * 8 + bit;
-        clear_bit(frame_index);
+        clear_bit(bitmap, frame_index);
         nr_free_frames++;
         
         bit++;
