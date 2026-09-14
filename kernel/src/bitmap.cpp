@@ -17,19 +17,17 @@ bool test_bit(uint8_t *bitmap, uint64_t bit_pos) {
 
 uint64_t set_first_free_zero(uint8_t *bitmap, uint64_t max_bytes) {
     uint64_t bit_pos = find_first_zero(bitmap, max_bytes);
-    set_bit(bitmap, bit_pos);
     return bit_pos;
 }
 
 uint64_t find_first_zero(uint8_t *bitmap, uint64_t max_bytes) {
     for (uint64_t cur_pos = 0; cur_pos < max_bytes; cur_pos++) {
         for (uint8_t i = 0; i < 8; i++) {
-            if (!test_bit(bitmap, i)) {
-                set_bit(bitmap, i);
+            if (!test_bit(bitmap, cur_pos * 8 + i)) {
                 return cur_pos * 8 + i;
             }
         }
     }
 
-    return 0;
+    return UINT64_MAX;
 }

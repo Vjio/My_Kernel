@@ -8,6 +8,6 @@ void clear_bit(uint8_t *bitmap, uint64_t bit_pos);
 // returns false if bit is unused
 bool test_bit(uint8_t *bitmap, uint64_t bit_pos);
 // returns position of the first previously free bit, now set to used
-uint64_t set_first_free_zero(uint8_t *bitmap, uint64_t max_bits);
+uint64_t set_first_free_zero(uint8_t *bitmap, uint64_t max_bytes);
 // returns position of first free bit
-uint64_t find_first_zero(uint8_t *bitmap, uint64_t max_bits);
+uint64_t find_first_zero(uint8_t *bitmap, uint64_t max_bytes);
