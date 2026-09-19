@@ -13,3 +13,23 @@ int strncmp(const char *s1, const char *s2, size_t n) {
     }
     return 0;
 }
+
+size_t strlen(const char *s) {
+    const char *p = s;
+    while (*p)
+        ++p;
+    return static_cast<size_t>(p - s);
+}
+
+const char *strstr(const char *haystack, const char *needle) {
+    size_t n = strlen(needle);
+    if (n == 0)
+        return haystack;
+
+    for (; *haystack; ++haystack) {
+        if (*haystack == *needle && strncmp(haystack, needle, n) == 0)
+            return haystack;
+    }
+
+    return nullptr;
+}
