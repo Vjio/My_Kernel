@@ -178,7 +178,7 @@ void hard_drive_handle_interrupt(interrupt_frame *frame) {
     abar->is = 0xFFFFFFFF;
 }
 
-void Drive::zero_out_drive() {
+void Drive::zero_out_disk() {
     uint8_t buf[sector_size];
     memset(buf, 0, sector_size);
 

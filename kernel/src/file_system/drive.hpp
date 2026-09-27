@@ -38,7 +38,7 @@ public:
     bool disk_write(uint64_t byte_offset, uint32_t size, void *buffer);
     bool disk_read(uint64_t byte_offset, uint32_t size, void *buffer);
     // beware, very inneficient helper!
-    void zero_out_drive();
+    void zero_out_disk();
 
     uint64_t get_capacity_bytes() { return sectors_nr * sector_size; }
     uint32_t get_sector_size() { return sector_size; }
