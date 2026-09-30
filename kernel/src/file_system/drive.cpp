@@ -1,5 +1,6 @@
 #include "drive.hpp"
 #include "../memory/memory.hpp"
+#include "../memory/heap.hpp"
 #include "../memory/vmm.hpp"
 #include "../stdio.hpp"
 #include "sata.hpp"
