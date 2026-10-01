@@ -2,15 +2,18 @@
 #include "../interrupts/idt.hpp"
 #include <cstddef>
 #include "../locking/lock.h"
+#include "../file_system/vsfs_layout.hpp"
+#include "../file_system/file.hpp"
 
 #define STARVING_TIME       1000
 #define MAX_NAME_LEN        32
-#define STACK_SIZE          FRAME_SIZE * 4
+#define MAX_FILE_FD         1024
+#define STACK_SIZE          (FRAME_SIZE * 4)
 // highest address in thread's own half of the page table
 #define USER_STACK_TOP      0x00007FFFFFFFF000ULL
 #define STACK_GUARD_SIZE    FRAME_SIZE
 #define HEAP_BASE           0x0000500000000000ULL
-// WAITING is currently unused
+
 typedef enum {
     READY,
     RUNNING,
@@ -19,6 +22,7 @@ typedef enum {
     DEAD
 } status_t;
 
+class FileSystem;
 struct process;
 
 struct thread {
@@ -64,6 +68,9 @@ struct thread {
 };
 
 struct process {
+    struct file *fds[MAX_FILE_FD];
+    struct inode *cwd;
+    FileSystem *fs;
     void* root_page_table;
     struct thread* threads;
     // current end of the process' heap. not keeping this alligned to FRAME_SIZE
@@ -71,6 +78,7 @@ struct process {
     uint64_t heap_end;
     size_t pid;
     size_t nr_of_threads;
+    uint64_t next_stack_slot;
     char name[MAX_NAME_LEN];
     struct spinlock lock;
     bool is_kernel_process;
@@ -89,7 +97,8 @@ inline void thread::thread_exit() {
 
     release(&parent->lock);
     status = DEAD;
-    while (true) {;}
+    while (true) 
+        asm volatile("hlt");
 }
 
 // VERY IMPORTANT: as of how the kernel is currently designed, do NOT call this function! at all!
