@@ -125,3 +125,6 @@ struct process *make_current_execution_process(char* name);
 // populates struct with basic information that will be used
 // for building the process' heap and the scheduler
 void populate_kernel_process_struct(struct process *proc);
+
+// returns -1 if fd table if full
+int find_first_free_fd(struct process *proc);

@@ -138,6 +138,19 @@ extern "C" void syscall_stub();
 // this will try to replicate linux syscalls as much as possible (at least on the argument side of things)
 extern "C" void syscall_handler(interrupt_frame *frame) {
     switch (frame->rax) {
+        case 0: {
+            // read(int fd, void buf[count], size_t count) syscall
+            // rdi -> fd
+            // rsi -> buf
+            // rdx -> count
+            int fd = frame->rdi;
+            size_t count = frame->rdx;
+            char *buf = reinterpret_cast<char *>(frame->rsi);
+
+            frame->rax = read(fd, buf, count);
+            break;
+        }
+
         case 1: {
             // write(int fd, void buf[count], size_t count) syscall
             // rdi -> fd
@@ -150,6 +163,39 @@ extern "C" void syscall_handler(interrupt_frame *frame) {
             frame->rax = write(fd, buf, count);
             break;
         }
+    
+        case 2: {
+            // open(char *path, int flags)
+            // rdi -> path
+            // rsi -> flags
+            char *path = reinterpret_cast<char *>(frame->rdi);
+            int flags = frame->rsi;
+
+            frame->rax = open(path, flags);
+            break;
+        }
+
+        case 3: {
+            // close(int fd)
+            // rdi -> fd
+            int fd = frame->rdi;
+
+            frame->rax = close(fd);
+            break;
+        }
+
+        case 8: {
+            // lseek(int fd, long offset, int whence)
+            // rdi -> fd
+            // rsi -> offset
+            // rdx -> whence
+            int fd = frame->rdi;
+            long offset = frame->rdx;
+            int whence = frame->rsi;
+
+            frame->rax = lseek(fd, offset, whence);
+            break;
+        }
 
         case 12: {
             // struct brk_ret *brk(size_t length) syscall
@@ -157,6 +203,15 @@ extern "C" void syscall_handler(interrupt_frame *frame) {
             struct brk_ret ret = brk(frame->rdi);
             frame->rax = reinterpret_cast<uint64_t>(ret.address);
             frame->rdx = ret.length;
+            break;
+        }
+
+        case 32: {
+            // dup(int oldfd)
+            // rdi -> oldfd
+            int oldfd = frame->rdi;
+
+            frame->rax = dup(oldfd);
             break;
         }
 
@@ -174,7 +229,6 @@ extern "C" void syscall_handler(interrupt_frame *frame) {
             // rsi -> name
             // rdx -> entry_point
             // r8 -> arg
-
             bool new_process_flag = static_cast<bool>(frame->rdi);
             char *name = reinterpret_cast<char *>(frame->rsi);
             uint64_t entry_point = frame->rdx;
@@ -188,6 +242,25 @@ extern "C" void syscall_handler(interrupt_frame *frame) {
             // exit() syscall
             exit();
             break;
+        }
+
+        case 264: {
+            // int renameat(int old_dir_fd, char *old_name, int new_dir_fd, char *new_name);
+            // rdi -> old_dir_fd
+            // rsi -> old_name
+            // rdx -> new_dir_fd
+            // r8 -> new_name
+            int old_dir_fd = frame->rdi;
+            char *old_name = reinterpret_cast<char *>(frame->rsi);
+            int new_dir_fd = frame->rdx;
+            char *new_name = reinterpret_cast<char *>(frame->r8);
+
+            frame->rax = renameat(old_dir_fd, old_name, new_dir_fd, new_name);
+            break;
+        }
+
+        case 265: {
+            
         }
 
         default:

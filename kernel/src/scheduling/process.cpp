@@ -221,3 +221,10 @@ void thread::take_thread_out_of_waiting() {
     ready_time = Scheduler::get_current_scheduler()->get_interrupt_nr();
     status = READY;
 }
+
+int find_first_free_fd(struct process *proc) {
+    for (int i = 0; i < MAX_FILE_FD; i++)
+        if (!proc->fds[i])
+            return i;
+    return -1;
+}

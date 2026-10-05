@@ -31,4 +31,3 @@ class SchedulerQueue {
     struct thread *head = nullptr;
     struct thread *tail = nullptr;
 };
-

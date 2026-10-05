@@ -14,11 +14,15 @@
 #include "memory/pmm.hpp"
 #include "memory/vmm.hpp"
 #include "memory/heap.hpp"
+#include "memory/memory.hpp"
 #include "scheduling/scheduler.hpp"
 #include "operators.hpp"
 #include "scheduling/process.hpp"
 #include "interrupts/pci.hpp"
 #include "file_system/ahci.hpp"
+#include "file_system/drive.hpp"
+#include "file_system/sata.hpp"
+#include "file_system/file.hpp"
 
 // Set the base revision to 6, this is recommended as this is the latest
 // base revision described by the Limine boot protocol specification.
@@ -113,13 +117,17 @@ extern "C" {
 extern void (*__init_array[])();
 extern void (*__init_array_end[])();
 
-// global declaration for flanterm pointer
+// GLOBALS
+
 struct flanterm_context *ft_ctx = nullptr;
+
 // this struct is only used to establish the kernel's struct before initializing its heap
 // (so as to circumvent a "chicken and egg" type of problem)
 // if you ever need to interact with the kernel process struct, ask the scheduler for it
 // (scheduler::get_running_thread). do not use this struct!
 struct process kernel_process;
+
+// END GLOBALS
 
 extern "C" void load_tss();
 
@@ -128,6 +136,33 @@ void trigger_stack_overflow() {
     trigger_stack_overflow();
     garbage[0] = 1;
 }
+
+// void test_scratch_drive(SATADrive *drive) {
+//     const uint32_t test_sizes[] = { 1, 8, 32, 33, 64, 50, 200 };
+//     uint64_t lba = 1000;
+
+//     for (uint32_t count : test_sizes) {
+//         printf("about to write count=%u\n", count);
+//         size_t bytes = count * drive->get_sector_size();
+//         uint8_t *write_buf = reinterpret_cast<uint8_t*>(malloc(bytes));
+//         uint8_t *read_buf  = reinterpret_cast<uint8_t*>(malloc(bytes));
+
+//         for (size_t i = 0; i < bytes; i++)
+//             write_buf[i] = (uint8_t)(i ^ 0xA5);
+//         memset(read_buf, 0, bytes);
+
+//         bool write_ok = drive->write_sectors(lba, count, write_buf);
+//         bool read_ok  = drive->read_sectors(lba, count, read_buf);
+//         bool match    = write_ok && read_ok && (memcmp(write_buf, read_buf, bytes) == 0);
+
+//         printf("count=%u write=%d read=%d match=%d\n", count, write_ok, read_ok, match);
+
+//         free(write_buf);
+//         free(read_buf);
+//         lba += count + 16;
+//     }
+//     printf("done!\n");
+// }
 
 // The following will be our kernel's entry point.
 // If renaming kmain() to something else, make sure to change the
@@ -247,6 +282,11 @@ extern "C" void kmain() {
     ahci_init(find_ahci_controller(hhdm_request.response->offset), hhdm_request.response->offset);
 
     __asm__ volatile ("sti");
+    // test_scratch_drive(static_cast<SATADrive*>(Drive::drives[0]));
+
+    FileSystem *fs = VSFS::mount_file_system(Drive::drives[0]);
+    Scheduler::get_current_scheduler()->get_running_thread()->parent->fs = fs;
+    Scheduler::get_current_scheduler()->get_running_thread()->parent->cwd = fs->inode_get(ROOT_INODE);
 
     // We're done, just hang...
     hcf();
