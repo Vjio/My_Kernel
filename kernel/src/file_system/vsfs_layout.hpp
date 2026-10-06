@@ -9,9 +9,9 @@
 // increasing this can lead to the struct increasing in size
 #define NR_DIRECT_P             10
 // move this to the superblock if file systems with different block sizes are ever implemented
-#define INDIRECT_1_CAPACITY     BLOCK_SIZE / sizeof(uint32_t)
-#define INDIRECT_2_CAPACITY     BLOCK_SIZE / sizeof(uint32_t) * INDIRECT_1_CAPACITY
-#define MAX_BLOCK_NR            NR_DIRECT_P + INDIRECT_1_CAPACITY + INDIRECT_2_CAPACITY
+#define INDIRECT_1_CAPACITY     (BLOCK_SIZE / sizeof(uint32_t))
+#define INDIRECT_2_CAPACITY     (BLOCK_SIZE / sizeof(uint32_t) * INDIRECT_1_CAPACITY)
+#define MAX_BLOCK_NR            (NR_DIRECT_P + INDIRECT_1_CAPACITY + INDIRECT_2_CAPACITY)
 
 struct inode_cache_entry {
     struct inode_cache_entry *next_entry;
