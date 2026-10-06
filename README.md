@@ -37,9 +37,9 @@ Implemented so far:
 - custom MLPQ scheduler (check src/scheduling/README.md for more information on it)
 - threads and processes
 - userland (syscalls)
+- file system (vsfs)
 
 Working on:
-- file system
 - elf loader
 - cli
 - SMP
