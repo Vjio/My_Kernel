@@ -84,7 +84,7 @@ uint64_t write(int fd, char *buf, size_t count) {
 }
 
 uint64_t read(int fd, char *buf, size_t count) {
-    if (!VMM::validate_userland_memory(buf, count, false))
+    if (!VMM::validate_userland_memory(buf, count, true))
         return static_cast<uint64_t>(-1);
 
     if (fd < 0 || fd >= MAX_FILE_FD)

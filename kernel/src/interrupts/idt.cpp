@@ -194,8 +194,8 @@ extern "C" void syscall_handler(interrupt_frame *frame) {
             // rsi -> offset
             // rdx -> whence
             int fd = frame->rdi;
-            long offset = frame->rdx;
-            int whence = frame->rsi;
+            long offset = frame->rsi;
+            int whence = frame->rdx;
 
             frame->rax = lseek(fd, offset, whence);
             break;
