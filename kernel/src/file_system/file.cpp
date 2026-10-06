@@ -37,10 +37,17 @@ FileSystem::FileSystem(struct superblock *superblock, Drive *drive)
 }
 
 FileSystem::~FileSystem() {
+    for (int i = 0; i < inode_cache_size; i++) {
+        // dont try to grab cache entry lock. inode_return also needs the lock
+        struct inode_cache_entry *entry = inode_cache[i];
+        while(entry->next_entry != nullptr)
+            inode_return(entry->next_entry->inode_entry->inode_nr);
+        inode_return(entry->inode_entry->inode_nr);
+    }
+
     free(inode_bitmap);
     free(data_bitmap);
     free(superblock);
-    // TODO: free cache too
 }
 
 VSFS *VSFS::write_vsfs(Drive *drive, struct superblock *superblock) {
@@ -524,21 +531,29 @@ struct inode *FileSystem::inode_alloc(uint8_t type, uint8_t perms, char name[NAM
     inode_cache[index] = new_entry;
     release(&cache_lock);
 
-    // update structures
-    write_inode_bitmap_to_disk();
-    write_data_bitmap_to_disk();
-    write_disk_inode_to_disk(inode);
-
     // link inode to parent
-    dir_add_and_link_entry(parent_dir, inode, name);
+    failure = !(dir_add_and_link_entry(parent_dir, inode, name));
+    if (failure)
+        // disk is full
+        goto clean_up;
 
     if (type == DIR) {
         prepare_dir_block(inode, disk_inode->direct_p[0]);
-        dir_add_and_link_entry(inode, inode, ".\0");
-        dir_add_and_link_entry(inode, parent_dir, "..\0");
+        failure = !(dir_add_and_link_entry(inode, inode, ".\0")) || 
+            !(dir_add_and_link_entry(inode, parent_dir, "..\0"));
+
+        if (failure) {
+            // failling to write entries to the first direct pointer of a directory
+            // should never happen. the block is already allocated (data_bitmap_alloc succeeded).
+            printf("weird bug in inode_alloc!\n");
+            while (true) {}
+        }
     }
 
-    // update superblock
+    // update disk
+    write_inode_bitmap_to_disk();
+    write_data_bitmap_to_disk();
+    write_disk_inode_to_disk(inode);
     write_superblock_to_disk();
 
 clean_up:
@@ -555,7 +570,7 @@ clean_up:
     return inode;
 }
 
-void FileSystem::dir_add_and_link_entry(struct inode *parent_dir, struct inode *target, char name[NAME_MAX_SIZE]) {
+bool FileSystem::dir_add_and_link_entry(struct inode *parent_dir, struct inode *target, char name[NAME_MAX_SIZE]) {
     const uint32_t entries_per_block = (superblock->block_size - sizeof(uint16_t)) / sizeof(struct entry);
 
     uint64_t current_block_offset = parent_dir->data->direct_p[0] * static_cast<uint64_t>(superblock->block_size);
@@ -570,22 +585,21 @@ void FileSystem::dir_add_and_link_entry(struct inode *parent_dir, struct inode *
         name_len = NAME_MAX_SIZE - 1;
     memcpy(new_entry.name, name, name_len);
 
+    uint64_t block_nr;
     uint64_t block_read = 1;
     uint64_t target_offset = current_block_offset;
     // find first block that's not full
     while (entry_nr >= entries_per_block) {
-        uint64_t block_nr;
         // need to read the next block of the dir
         // check if block is allocated
         if (parent_dir->data->blocks <= block_read) {
             block_nr = bmap(parent_dir, block_read, true);
             if (block_nr == UINT32_MAX) {
-                // TODO: write gracefull failure path if disk is full
-                printf("TODO in dir_add_and_link_entry\n");
-                while (true) {;}
+                // disk is full, cannot add entry to dir
+                return false;
             }
-            prepare_dir_block(parent_dir, block_nr);
 
+            prepare_dir_block(parent_dir, block_nr);
             target_offset = superblock->block_size * block_nr;
             entry_nr = 0;
 
@@ -594,7 +608,7 @@ void FileSystem::dir_add_and_link_entry(struct inode *parent_dir, struct inode *
             if (block_nr == UINT32_MAX) {
                 // this should never happen
                 printf("weird error in dir_add_and_link_entry\n");
-                while (true) {;}
+                return false;
             }
 
             target_offset = superblock->block_size * block_nr;
@@ -620,6 +634,7 @@ void FileSystem::dir_add_and_link_entry(struct inode *parent_dir, struct inode *
 
     write_disk_inode_to_disk(parent_dir);
     write_disk_inode_to_disk(target);
+    return true;
 }
 
 struct inode *FileSystem::inode_get(uint32_t inode_nr) {
@@ -1290,11 +1305,20 @@ bool FileSystem::move(uint32_t src_dir_nr, char src_name[NAME_MAX_SIZE],
     }
 
     // add the new entry first so hard_links never reaches 0
-    dir_add_and_link_entry(dst_dir, target, dst_name);
+    if (!(dir_add_and_link_entry(dst_dir, target, dst_name)))
+        // disk is full. move failed
+        goto end;
+
     dir_remove_and_unlink_entry(src_dir, src_name);
 
     if (target->data->type == DIR && src_dir != dst_dir) {
-        dir_add_and_link_entry(target, dst_dir, "..\0");
+        if (!(dir_add_and_link_entry(target, dst_dir, "..\0"))) {
+            // disk is full. revert previous move
+            dir_add_and_link_entry(src_dir, target, src_name);
+            dir_remove_and_unlink_entry(dst_dir, dst_name);
+            goto end;
+        }
+
         dir_remove_and_unlink_entry(target, "..\0");
     }
 
@@ -1366,8 +1390,7 @@ bool FileSystem::link(uint32_t dst_dir_nr, uint32_t target_nr, char dst_name[NAM
         goto end;
 
     // does hard_links++ and writes both disk inodes
-    dir_add_and_link_entry(dst_dir, target, dst_name);
-    ret = true;
+    ret = !(dir_add_and_link_entry(dst_dir, target, dst_name));
 
 end:
     if (dst_dir != nullptr)

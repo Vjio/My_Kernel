@@ -114,7 +114,8 @@ class FileSystem {
     struct inode *inode_alloc(uint8_t type, uint8_t perms, char name[NAME_MAX_SIZE], struct inode *parent_dir);
 
     // adds an entry to a directory. updates both parent and target disk inodes on the disk
-    void dir_add_and_link_entry(struct inode *parent_dir, struct inode *target, char name[NAME_MAX_SIZE]);
+    // returns false if disk is full
+    bool dir_add_and_link_entry(struct inode *parent_dir, struct inode *target, char name[NAME_MAX_SIZE]);
 
     // removes an entry from a directory data blocks. calls unlink on the entry
     void dir_remove_and_unlink_entry(struct inode *parent_dir, char name[NAME_MAX_SIZE]);
