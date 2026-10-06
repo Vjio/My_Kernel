@@ -147,6 +147,7 @@ extern "C" void syscall_handler(interrupt_frame *frame) {
             size_t count = frame->rdx;
             char *buf = reinterpret_cast<char *>(frame->rsi);
 
+            __asm__ volatile ("sti");
             frame->rax = read(fd, buf, count);
             break;
         }
@@ -160,6 +161,7 @@ extern "C" void syscall_handler(interrupt_frame *frame) {
             size_t count = frame->rdx;
             char *buf = reinterpret_cast<char *>(frame->rsi);
 
+            __asm__ volatile ("sti");
             frame->rax = write(fd, buf, count);
             break;
         }
@@ -171,6 +173,7 @@ extern "C" void syscall_handler(interrupt_frame *frame) {
             char *path = reinterpret_cast<char *>(frame->rdi);
             int flags = frame->rsi;
 
+            __asm__ volatile ("sti");
             frame->rax = open(path, flags);
             break;
         }
@@ -180,6 +183,7 @@ extern "C" void syscall_handler(interrupt_frame *frame) {
             // rdi -> fd
             int fd = frame->rdi;
 
+            __asm__ volatile ("sti");
             frame->rax = close(fd);
             break;
         }
@@ -255,6 +259,7 @@ extern "C" void syscall_handler(interrupt_frame *frame) {
             int new_dir_fd = frame->rdx;
             char *new_name = reinterpret_cast<char *>(frame->r8);
 
+            __asm__ volatile ("sti");
             frame->rax = renameat(old_dir_fd, old_name, new_dir_fd, new_name);
             break;
         }
