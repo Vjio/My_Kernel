@@ -146,8 +146,11 @@ bool SATADrive::rw_sectors(uint64_t lba, uint32_t count, void *buffer, uint8_t u
 
         if (ok && user_cmd == ATA_CMD_READ_DMA_EX)
             memcpy(cursor, reinterpret_cast<void *>(command_slots[slot].bounce_virt), byte_count);
-        if (!ok)
+
+        if (!ok) {
+            release_slot(slot);
             return false;
+        }
 
         release_slot(slot);
 
