@@ -17,6 +17,8 @@ bool test_bit(uint8_t *bitmap, uint64_t bit_pos) {
 
 uint64_t set_first_free_zero(uint8_t *bitmap, uint64_t max_bytes) {
     uint64_t bit_pos = find_first_zero(bitmap, max_bytes);
+    if (bit_pos != UINT64_MAX) 
+        set_bit(bitmap, bit_pos);
     return bit_pos;
 }
 
