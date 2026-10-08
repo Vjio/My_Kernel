@@ -99,6 +99,14 @@ class FileSystem {
     // and returns false
     bool extend(struct inode *inode, uint32_t new_block_count);
 
+    // returns the absolute block number of an inode's relative_block_nr
+    // allocates all the blocks up to the requested block_nr if the alloc flag is set
+    // returns UINT32_T if it failes
+    //
+    // (example: bmap(inode, 3, false) will return the abosolute block number of
+    // the inode's 4rd block (in this case, direct_p[3]))
+    uint32_t bmap(struct inode *inode, uint32_t relative_block_nr, bool alloc);
+
     public:
     FileSystem(struct superblock *superblock, Drive *drive);
     virtual ~FileSystem();
@@ -142,14 +150,6 @@ class FileSystem {
     // writes the name of the file in return_name buffer
     struct inode *resolve_parent_dir(uint32_t cwd_inode_nr, const char *path, char return_name[NAME_MAX_SIZE]);
 
-    // returns the absolute block number of an inode's relative_block_nr
-    // allocates all the blocks up to the requested block_nr if the alloc flag is set
-    // returns UINT32_T if it failes
-    //
-    // (example: bmap(inode, 3, false) will return the abosolute block number of
-    // the inode's 4rd block (in this case, direct_p[3]))
-    uint32_t bmap(struct inode *inode, uint32_t relative_block_nr, bool alloc);
-
     // updates disk_inode structure on the disk
     void write_disk_inode_to_disk(struct inode *inode);
     // decrements and updates hard_link count on the disk
@@ -192,6 +192,9 @@ class FileSystem {
     // resolves the parent of path, then creates a directory named after the last component
     // returns false if function fails
     bool mkdir_path(uint32_t base_inode_nr, const char *path);
+
+    // returns nullptr on failure
+    struct file *open_file(int flags, uint32_t cwd_inode_nr, const char *path);
 };
 
 class VSFS : public FileSystem {

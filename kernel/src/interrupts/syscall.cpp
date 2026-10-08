@@ -179,72 +179,22 @@ static bool copy_path_from_user(char *dst, const char *user_src, size_t dst_size
 }
 
 int open(char *path, int flags) {
-    int access = flags & 3;
-    if (access == 3)
-        return -1;
-    bool writable = (access == O_WRONLY || access == O_RDWR);
-
     struct thread *running_thread = Scheduler::get_current_scheduler()->get_running_thread();
     struct process *running_process = running_thread->parent;
     FileSystem *fs = running_process->fs;
 
-    char kernel_path[MAX_PATH_SIZE];
-    if (!copy_path_from_user(kernel_path, path, sizeof(kernel_path)))
+    struct file *new_file = fs->open_file(flags, running_process->cwd->inode_nr, path);
+    if (new_file == nullptr)
         return -1;
-
-    struct inode *inode = fs->path_resolver(running_process->cwd->inode_nr, kernel_path);
-    if (inode == nullptr) {
-        if ((flags & O_CREAT) == 0)
-            return -1;
-
-        char name_buffer[NAME_MAX_SIZE];
-        struct inode *parent_dir = fs->resolve_parent_dir(running_process->cwd->inode_nr,
-            kernel_path, name_buffer);
-        if (parent_dir == nullptr)
-            return -1;
-
-        inode = fs->inode_alloc(FILE, DEFAULT_PERM, name_buffer, parent_dir);
-        fs->inode_return(parent_dir->inode_nr);
-
-        if (inode == nullptr)
-            return -1;
-
-        if (inode->data->type != FILE) {
-            fs->inode_return(inode->inode_nr);
-            return -1;
-        }
-    }
-
-    // dirs can be opened only for read
-    if (inode->data->type == DIR && (writable || (flags & O_TRUNC))) {
-        fs->inode_return(inode->inode_nr);
-        return -1;
-    }
-
-    struct file *new_file = reinterpret_cast<struct file *>(calloc(1, sizeof(struct file)));
-    if (new_file == nullptr) {
-        fs->inode_return(inode->inode_nr);
-        return -1;
-    }
-
-    new_file->ip = inode;
-    new_file->lock.locked = false;
-    new_file->readable = (access == O_RDONLY || access == O_RDWR);
-    new_file->writable = writable;
-    new_file->off = 0;
-    new_file->ref = 1;
 
     int fd = find_first_free_fd(running_process);
     if (fd == -1) {
         // TODO: allow increasing the fd table in size if a bigger table is ever needed
         printf("you ran out of fds!\n");
+        fs->inode_return(new_file->ip->inode_nr);
         free(new_file);
-        fs->inode_return(inode->inode_nr);
         return -1;
     }
-
-    if (writable && (flags & O_TRUNC) && inode->data->size != 0)
-        fs->resize_file(inode, 0);
 
     running_process->fds[fd] = new_file;
     return fd;

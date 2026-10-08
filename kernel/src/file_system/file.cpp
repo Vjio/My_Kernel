@@ -1483,3 +1483,56 @@ end:
     inode_return(parent_dir->inode_nr);
     return ret;
 }
+
+struct file *FileSystem::open_file(int flags, uint32_t cwd_inode_nr, const char *path) {
+    int access = flags & 3;
+    if (access == 3)
+        return nullptr;
+
+    struct inode *inode = path_resolver(cwd_inode_nr, path);
+    if (inode == nullptr) {
+        if ((flags & O_CREAT) == 0)
+            return nullptr;
+
+        char name_buffer[NAME_MAX_SIZE];
+        struct inode *parent_dir = resolve_parent_dir(cwd_inode_nr, path, name_buffer);
+        if (parent_dir == nullptr)
+            return nullptr;
+
+        inode = inode_alloc(FILE, DEFAULT_PERM, name_buffer, parent_dir);
+        inode_return(parent_dir->inode_nr);
+
+        if (inode == nullptr)
+            return nullptr;
+
+        if (inode->data->type != FILE) {
+            inode_return(inode->inode_nr);
+            return nullptr;
+        }
+    }
+
+    bool writable = (access == O_WRONLY || access == O_RDWR);
+    // dirs can be opened only for read
+    if (inode->data->type == DIR && (writable || (flags & O_TRUNC))) {
+        inode_return(inode->inode_nr);
+        return nullptr;
+    }
+
+    struct file *new_file = reinterpret_cast<struct file *>(calloc(1, sizeof(struct file)));
+    if (new_file == nullptr) {
+        inode_return(inode->inode_nr);
+        return nullptr;
+    }
+
+    new_file->ip = inode;
+    new_file->lock.locked = false;
+    new_file->readable = (access == O_RDONLY || access == O_RDWR);
+    new_file->writable = writable;
+    new_file->off = 0;
+    new_file->ref = 1;
+
+    if (writable && (flags & O_TRUNC) && inode->data->size != 0)
+        resize_file(inode, 0);
+
+    return new_file;
+}
