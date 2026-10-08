@@ -29,7 +29,9 @@ struct thread *SchedulerQueue::peek() {
 void SchedulerQueue::pop() {
     if (head == nullptr)
         return;
+    struct thread *temp = head;
     head = head->next;
+    temp->next = nullptr;
     if (!head)
         tail = nullptr;
 }
@@ -40,6 +42,7 @@ void SchedulerQueue::push(struct thread *new_task) {
     else
         head = new_task;
     tail = new_task;
+    new_task->next = nullptr;
 }
 
 void SchedulerQueue::clean_up() {
