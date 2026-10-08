@@ -24,6 +24,9 @@ void PMM::init_PMM(struct limine_memmap_response* memmap, uint64_t hhdm_offset) 
     bitmap = nullptr;
 
     for (uint64_t i = 0; i < memmap->entry_count; i++) {
+        if (memmap->entries[i]->type != LIMINE_MEMMAP_USABLE)
+            continue;
+
         // find the highest physical memory address in order to calculate bit map size
         uint64_t top_of_region = memmap->entries[i]->base + memmap->entries[i]->length;
         if (top_of_region > highest_address) {
@@ -46,7 +49,7 @@ void PMM::init_PMM(struct limine_memmap_response* memmap, uint64_t hhdm_offset) 
     }
 
     if (bitmap == nullptr) {
-        // no contiguous region large enough for the bitmap
+        printf("no contiguous region large enough for the bitmap!\n");
         bitmap = nullptr;
         return; 
     }

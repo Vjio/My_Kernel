@@ -3,12 +3,12 @@
 #include <cstddef>
 
 #ifndef FRAME_SIZE
-#define FRAME_SIZE 4 * 1024
+#define FRAME_SIZE (4 * 1024)
 #endif
 
 #define USED        0
 #define FREE        1
-#define INIT_SIZE   FRAME_SIZE * 4
+#define INIT_SIZE   (FRAME_SIZE * 4)
 
 // TODO: later optimization, find a way to get rid of
 // the extra mem overhead

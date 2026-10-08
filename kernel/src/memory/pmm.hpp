@@ -5,7 +5,7 @@
 #include "../locking/lock.h"
 
 #ifndef FRAME_SIZE
-#define FRAME_SIZE 4 * 1024
+#define FRAME_SIZE (4 * 1024)
 #endif
 
 typedef unsigned long paddr_t;
