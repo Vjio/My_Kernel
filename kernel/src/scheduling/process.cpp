@@ -212,12 +212,12 @@ void thread::thread_sleep(uint64_t ticks) {
 }
 
 void thread::wait_until_taken_out_of_waiting() {
-    printf("PUT THREAD INTO WAITING\n");
+    // printf("PUT THREAD INTO WAITING\n");
     while(status == WAITING);
 }
 
 void thread::take_thread_out_of_waiting() {
-    printf("TAKE THREAD OUT OF WAITING\n");
+    // printf("TAKE THREAD OUT OF WAITING\n");
     ready_time = Scheduler::get_current_scheduler()->get_interrupt_nr();
     status = READY;
 }
