@@ -284,9 +284,15 @@ extern "C" void kmain() {
     __asm__ volatile ("sti");
     // test_scratch_drive(static_cast<SATADrive*>(Drive::drives[0]));
 
+    printf("mounting file system\n");
     FileSystem *fs = VSFS::mount_file_system(Drive::drives[0]);
-    Scheduler::get_current_scheduler()->get_running_thread()->parent->fs = fs;
-    Scheduler::get_current_scheduler()->get_running_thread()->parent->cwd = fs->inode_get(ROOT_INODE);
+    struct thread *kernel_thread = Scheduler::get_current_scheduler()->get_running_thread();
+    kernel_thread->parent->fs = fs;
+    kernel_thread->parent->cwd = fs->inode_get(ROOT_INODE);
+    printf("file system mounted successfully\n");
+
+    // TODO: once stdin, stdout etc are added to all programs
+    // add it to kernel program too
 
     // We're done, just hang...
     hcf();

@@ -8,8 +8,8 @@
 #include "../memory/pmm.hpp"
 
 #define MAX_CMD_RETRIES         3
-#define BOUNCE_BUFFER_SIZE      FRAME_SIZE * 4
-#define BOUNCE_BUFFER_SECTORS   BOUNCE_BUFFER_SIZE / 512
+#define BOUNCE_BUFFER_SIZE      (FRAME_SIZE * 4)
+#define BOUNCE_BUFFER_SECTORS   (BOUNCE_BUFFER_SIZE / 512)
 
 class Drive {
 protected:

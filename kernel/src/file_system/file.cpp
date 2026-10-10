@@ -39,11 +39,13 @@ FileSystem::FileSystem(struct superblock *superblock, Drive *drive)
 FileSystem::~FileSystem() {
     for (int i = 0; i < inode_cache_size; i++) {
         // dont try to grab cache entry lock. inode_return also needs the lock
-        struct inode_cache_entry *entry = inode_cache[i];
-        while(entry->next_entry != nullptr)
-            inode_return(entry->next_entry->inode_entry->inode_nr);
-        inode_return(entry->inode_entry->inode_nr);
+        while (inode_cache[i] != nullptr) {
+            // inode return updates the head of the cache
+            inode_cache[i]->inode_entry->ref = 1;
+            inode_return(inode_cache[i]->inode_entry->inode_nr);
+        }
     }
+    free(inode_cache);
 
     free(inode_bitmap);
     free(data_bitmap);
@@ -62,8 +64,8 @@ VSFS *VSFS::write_vsfs(Drive *drive, struct superblock *superblock) {
         return nullptr;
     }
 
-    // could just zero out the bitmaps. for now, since the "disk" will be very small, this works
-    drive->zero_out_disk();
+    uint8_t zero_buf[superblock->block_size];
+    memset(zero_buf, 0, superblock->block_size);
 
     // TODO: increase inode_count if inodes run out. or decrease if there are too many
     superblock->inode_table_blocks = superblock->total_blocks / 10;
@@ -79,6 +81,11 @@ VSFS *VSFS::write_vsfs(Drive *drive, struct superblock *superblock) {
     superblock->inode_bitmap_start = 1;
     uint32_t inode_bitmap_bytes = (superblock->inode_count + 7) / 8;
     superblock->inode_bitmap_blocks = (inode_bitmap_bytes + superblock->block_size - 1) / superblock->block_size;
+    // zero out bitmap
+    for (int i = 0; i < superblock->inode_bitmap_blocks; i++) {
+        drive->disk_write((superblock->inode_bitmap_start + i) * superblock->block_size,
+            superblock->block_size, zero_buf);
+    }
 
     superblock->data_bitmap_start = superblock->inode_bitmap_start + superblock->inode_bitmap_blocks;
     superblock->data_blocks = superblock->total_blocks - superblock->inode_table_blocks -
@@ -90,6 +97,11 @@ VSFS *VSFS::write_vsfs(Drive *drive, struct superblock *superblock) {
     uint32_t blocks_per_group = bits_per_block + 1;
     // ceil(data_blocks / blocks_per_group)
     superblock->data_bitmap_blocks = (superblock->data_blocks + blocks_per_group - 1) / blocks_per_group;
+    // zero out bitmap
+    for (int i = 0; i < superblock->data_bitmap_blocks; i++) {
+        drive->disk_write((superblock->data_bitmap_start + i) * superblock->block_size,
+            superblock->block_size, zero_buf);
+    }
 
     superblock->data_blocks -= superblock->data_bitmap_blocks;
     // first block is the root
@@ -98,15 +110,19 @@ VSFS *VSFS::write_vsfs(Drive *drive, struct superblock *superblock) {
     superblock->inode_table_start = superblock->data_bitmap_start + superblock->data_bitmap_blocks;
     superblock->data_start = superblock->inode_table_start + superblock->inode_table_blocks;
 
-    drive->disk_write(SUPERBLOCK_LBA, sizeof(struct superblock), superblock);
+    memmove(zero_buf, superblock, sizeof(struct superblock));
+    drive->disk_write(SUPERBLOCK_LBA, superblock->block_size, reinterpret_cast<void *>(zero_buf));
 
+    memset(zero_buf, 0, superblock->block_size);
     uint8_t inode_bitmap = 0b00000111;
+    zero_buf[0] = inode_bitmap;
     drive->disk_write(superblock->inode_bitmap_start * superblock->block_size,
-            1, reinterpret_cast<void *>(&inode_bitmap));
+            superblock->block_size, reinterpret_cast<void *>(zero_buf));
 
     uint8_t data_bitmap  = 0b00000001;
+    zero_buf[0] = inode_bitmap;
     drive->disk_write(superblock->data_bitmap_start * superblock->block_size,
-            1, reinterpret_cast<void *>(&data_bitmap));
+            superblock->block_size, reinterpret_cast<void *>(zero_buf));
 
     struct disk_inode *inodes = reinterpret_cast<struct disk_inode *>(
         calloc(3, sizeof(struct disk_inode)));
@@ -1390,7 +1406,7 @@ bool FileSystem::link(uint32_t dst_dir_nr, uint32_t target_nr, char dst_name[NAM
         goto end;
 
     // does hard_links++ and writes both disk inodes
-    ret = !(dir_add_and_link_entry(dst_dir, target, dst_name));
+    ret = dir_add_and_link_entry(dst_dir, target, dst_name);
 
 end:
     if (dst_dir != nullptr)
