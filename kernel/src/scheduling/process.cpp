@@ -223,7 +223,8 @@ void thread::take_thread_out_of_waiting() {
 }
 
 int find_first_free_fd(struct process *proc) {
-    for (int i = 0; i < MAX_FILE_FD; i++)
+    // start from 3 to jump over in, out, err
+    for (int i = 3; i < MAX_FILE_FD; i++)
         if (!proc->fds[i])
             return i;
     return -1;

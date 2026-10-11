@@ -269,5 +269,3 @@ void SATADrive::identify() {
     sector_size = sector_sz;
     release_slot(slot);
 }
-
-

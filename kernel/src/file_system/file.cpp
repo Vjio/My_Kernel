@@ -12,7 +12,7 @@ FileSystem::FileSystem(struct superblock *superblock, Drive *drive)
         data_bitmap = reinterpret_cast<uint8_t *>(calloc(1, superblock->data_bitmap_blocks * superblock->block_size));
 
         // TODO: handle these failure paths somehow if they ever happen
-        // (retry reading a few times? thus would point to some kind of bug in the driver
+        // (retry reading a few times? this would point to some kind of bug in the driver
         // or a faulty disk)
         if (!drive->disk_read(superblock->inode_bitmap_start * superblock->block_size,
             superblock->inode_bitmap_blocks * superblock->block_size, inode_bitmap)) {
@@ -120,7 +120,7 @@ VSFS *VSFS::write_vsfs(Drive *drive, struct superblock *superblock) {
             superblock->block_size, reinterpret_cast<void *>(zero_buf));
 
     uint8_t data_bitmap  = 0b00000001;
-    zero_buf[0] = inode_bitmap;
+    zero_buf[0] = data_bitmap;
     drive->disk_write(superblock->data_bitmap_start * superblock->block_size,
             superblock->block_size, reinterpret_cast<void *>(zero_buf));
 
@@ -150,10 +150,10 @@ VSFS *VSFS::write_vsfs(Drive *drive, struct superblock *superblock) {
     dir_entry.entry_nr = 2;
     dir_entry.entries = entries;
 
-    drive->disk_write(superblock->data_start * superblock->block_size,
+    drive->disk_write(static_cast<uint64_t>(superblock->data_start) * superblock->block_size,
         sizeof(dir_entry.entry_nr), reinterpret_cast<void *>(&dir_entry.entry_nr));
-    drive->disk_write(superblock->data_start * superblock->block_size + sizeof(dir_entry.entry_nr),
-        dir_entry.entry_nr * sizeof(struct entry), entries);
+    drive->disk_write(static_cast<uint64_t>(superblock->data_start)  * superblock->block_size +
+        sizeof(dir_entry.entry_nr), dir_entry.entry_nr * sizeof(struct entry), entries);
     free(entries);
 
     return new VSFS(superblock, drive);
