@@ -3,13 +3,14 @@
 ; int 0x80 does not clobber rcx/r11 the way the `syscall` instruction does,
 ; so arguments already sit exactly where the SysV C calling convention put
 ; them (rdi, rsi, rdx, ...) — these stubs only need to set the syscall
-; number in rax and trap. no argument shuffling required.
+; number in rax and trap
 
 global sys_write
 global sys_sleep
 global sys_clone
 global sys_sleep
 global sys_brk
+global sys_exit
 
 
 ; long sys_write(int fd, const void *buf, size_t count)
@@ -21,12 +22,12 @@ sys_write:
 
 ; void sleep(uint8_t ticks)
 ; rdi -> ticks
-sys_sleep
-    mov rax, 15
+sys_sleep:
+    mov rax, 55
     int 0x80
     ret
 
-sys_exit
+sys_exit:
     mov rax, 60
     int 0x80
     ret
@@ -34,7 +35,7 @@ sys_exit
 ; uint64_t clone(bool new_process_flag, char *name, uint64_t entry_point, void *arg) syscall,
 ; rdi -> new_process_flag,  rsi -> name
 ; rdx -> entry_point,       r8 -> arg
-sys_clone
+sys_clone:
     mov rax, 56
     int 0x80
     ret

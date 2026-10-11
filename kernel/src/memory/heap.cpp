@@ -12,6 +12,7 @@
 
 // first node in double linked list
 static struct heap_node *heap_start = nullptr;
+static spinlock heap_lock;
 
 void heap_init(uint64_t hhdm_offset, struct process *proc) {
     // heap_init runs in kernel land, thus we can just call VMM and
@@ -28,15 +29,9 @@ void heap_init(uint64_t hhdm_offset, struct process *proc) {
         proc->heap_end = reinterpret_cast<uint64_t>(heap_start) + INIT_SIZE;
 
     } else {
-        if (!VMM::map_pages(reinterpret_cast<uint64_t *>(proc->root_page_table), HEAP_BASE,
-            INIT_SIZE / FRAME_SIZE, PTE_PRESENT | PTE_READ_WRITE | PTE_USER)) {
-                // TODO: rewrite heap to gracefully handle running out of memory
-                // sorry future me for technical debt
-                printf("thread heap init failed!\n");
-                while(true) {;}
-        }
-        heap_start = reinterpret_cast<struct heap_node *>(HEAP_BASE);
-        proc->heap_end = HEAP_BASE + INIT_SIZE;
+        // for userland processes, the heap is init on the first brk call
+        proc->heap_end = HEAP_BASE;
+        return;
     }
 
     heap_start->next = nullptr;
@@ -44,6 +39,7 @@ void heap_init(uint64_t hhdm_offset, struct process *proc) {
     heap_start->status = FREE;
 
     heap_start->size = INIT_SIZE - sizeof(struct heap_node);
+    heap_lock.locked = false;
 }
 
 static void split_node(struct heap_node *node, size_t size) {

@@ -1,5 +1,6 @@
 #include "userland_heap.hpp"
 #include "../memory/memory.hpp"
+#include "../locking/lock.h"
 #include "../stdio.hpp"
 #include "userland.hpp"
 #include <stdint.h>
@@ -9,6 +10,7 @@
 
 // first node in double linked list
 static struct heap_node *heap_start = nullptr;
+static spinlock heap_lock;
 
 static void split_node(struct heap_node *node, size_t size) {
     // make a new node out of the current's node unused mem
@@ -75,6 +77,26 @@ void *userland::malloc(size_t size) {
     if (size < MIN_ALLOC_SIZE)
         size = MIN_ALLOC_SIZE;
 
+    if (heap_start == nullptr) {
+        acquire(&heap_lock);
+        struct brk_ret ret = sys_brk(INIT_SIZE);
+        if (ret.address == nullptr) {
+            // TODO: handle brk failng gracefully
+            release(&heap_lock);
+            printf("expand heap failed!\n");
+            return nullptr;
+        }
+        heap_start = reinterpret_cast<struct heap_node *>(ret.address);
+
+        heap_start->next = nullptr;
+        heap_start->prev = nullptr;
+        heap_start->status = FREE;
+    
+        heap_start->size = INIT_SIZE - sizeof(struct heap_node);
+        release(&heap_lock);
+    }
+    
+    acquire(&heap_lock);
     // find first block in heap with at least size space available
     struct heap_node *temp = heap_start;
     struct heap_node *prev = nullptr;
@@ -96,7 +118,8 @@ void *userland::malloc(size_t size) {
             // If we can't cleanly split, just give them the slightly larger block
             temp->status = USED;
         }
-    
+        
+        release(&heap_lock);
         return reinterpret_cast<void *>(reinterpret_cast<uint8_t *>(temp)
             + sizeof(struct heap_node));
     }
@@ -106,6 +129,7 @@ void *userland::malloc(size_t size) {
         // increase size of current node and return it
         expand_heap(prev, size, true);
         prev->status = USED;
+        release(&heap_lock);
         return reinterpret_cast<void *>(reinterpret_cast<uint8_t *>(prev)
             + sizeof(struct heap_node));
     }
@@ -113,6 +137,7 @@ void *userland::malloc(size_t size) {
     // make a new node and return it
     expand_heap(prev, size, false);
     prev->next->status = USED;
+    release(&heap_lock);
     return reinterpret_cast<void *>(reinterpret_cast<uint8_t *>(prev->next)
             + sizeof(struct heap_node));
 }
@@ -204,6 +229,7 @@ void *userland::realloc(void *ptr, size_t size) {
     if (node->size == size)
         return ptr;
 
+    acquire(&heap_lock);
     // see if we can just downsize node
     if (node->size >= size + sizeof(struct heap_node) + MIN_ALLOC_SIZE) {
         struct heap_node *new_node = reinterpret_cast<struct heap_node *>(
@@ -222,6 +248,7 @@ void *userland::realloc(void *ptr, size_t size) {
         // try to merge new node
         try_merge_with_right(new_node);
 
+        release(&heap_lock);
         return ptr;
     }
 
@@ -239,11 +266,13 @@ void *userland::realloc(void *ptr, size_t size) {
             // check if there is extra space to split
             if (node->size >= size + sizeof(struct heap_node) + MIN_ALLOC_SIZE)
                 split_node(node, size);
+            release(&heap_lock);
             return ptr;
         }
     }
 
     // ask for a new node
+    release(&heap_lock);
     void *new_ptr = malloc(size);
     if (new_ptr == nullptr) {
         // this should not happen. should change this to a more robust log
