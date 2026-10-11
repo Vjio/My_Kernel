@@ -8,6 +8,11 @@
 #define PTE_WRITE_THROUGH    0b01000
 #define PTE_CACHE_DISABLE    0b10000
 
+// PML4 index 384 (a random number chosen between 256-511,
+// 256 is taken by HHDM, 511 by the kernel image)
+#define KERNEL_HEAP_PML4_INDEX  384
+#define KERNEL_HEAP_BASE        0xFFFFC00000000000ULL
+
 class VMM {
     public:
     VMM() = delete;

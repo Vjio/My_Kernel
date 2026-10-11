@@ -13,20 +13,20 @@
 // first node in double linked list
 static struct heap_node *heap_start = nullptr;
 static spinlock heap_lock;
+static uint64_t heap_end;
 
 void heap_init(uint64_t hhdm_offset, struct process *proc) {
     // heap_init runs in kernel land, thus we can just call VMM and
     // not go through the lengthier process of a syscall
     if (proc->is_kernel_process) {
-        heap_start = reinterpret_cast<struct heap_node *>
-            (PMM::alloc_frames(INIT_SIZE / FRAME_SIZE) + hhdm_offset);
-        if (heap_start == 0) {
-            // TODO: rewrite heap to gracefully handle running out of memory
-            // sorry future me for technical debt
+        if (!VMM::map_pages(nullptr, KERNEL_HEAP_BASE, INIT_SIZE / FRAME_SIZE, PTE_PRESENT | PTE_READ_WRITE)) {
+            // i cant think of any reason this should happen
             printf("thread heap init failed!\n");
             while(true) {;}
         }
+        heap_start = reinterpret_cast<struct heap_node *> (KERNEL_HEAP_BASE);
         proc->heap_end = reinterpret_cast<uint64_t>(heap_start) + INIT_SIZE;
+        heap_end = proc->heap_end;
 
     } else {
         // for userland processes, the heap is init on the first brk call
@@ -69,19 +69,14 @@ static void expand_heap(struct heap_node *last_node, size_t requested_size, bool
     // force a round up
     int pages_to_alloc = (requested_size + FRAME_SIZE - 1) / FRAME_SIZE;
 
-    struct process *proc = Scheduler::get_current_scheduler()->get_running_thread()->parent;
-    uint64_t old_heap_end = proc->heap_end;
-    if (proc->is_kernel_process) {
-        if (!VMM::map_pages(nullptr, proc->heap_end, pages_to_alloc, PTE_PRESENT | PTE_READ_WRITE | PTE_CACHE_DISABLE)) {
-            // TODO: handle running out of memory gracefully
-            printf("heap expansion failed!\n");
-            while(true) {;}
-        }
-        proc->heap_end += pages_to_alloc * FRAME_SIZE;
+    uint64_t old_heap_end = heap_end;
 
-    } else {
-        // call brk
+    if (!VMM::map_pages(nullptr, heap_end, pages_to_alloc, PTE_PRESENT | PTE_READ_WRITE)) {
+        // TODO: handle running out of memory gracefully
+        printf("heap expansion failed!\n");
+        while(true) {;}
     }
+    heap_end += pages_to_alloc * FRAME_SIZE;
 
     struct heap_node *new_node;
     size_t offset = 0;
@@ -92,8 +87,10 @@ static void expand_heap(struct heap_node *last_node, size_t requested_size, bool
         // check if requested size is exactly how much we allocated
         // or if if we alloced just a bit over the requested size
         if (requested_size == pages_to_alloc * FRAME_SIZE ||
-            requested_size + MIN_ALLOC_SIZE + sizeof(struct heap_node) >= pages_to_alloc * FRAME_SIZE)
+            requested_size + MIN_ALLOC_SIZE + sizeof(struct heap_node) >= pages_to_alloc * FRAME_SIZE) {
+            last_node->size += pages_to_alloc * FRAME_SIZE - requested_size;
             return;
+        }
 
         // there was extra space allocated, chop it into a new node
         new_node = reinterpret_cast<struct heap_node *> (old_heap_end + requested_size);
@@ -115,6 +112,7 @@ void *malloc(size_t size) {
     if (size < MIN_ALLOC_SIZE)
         size = MIN_ALLOC_SIZE;
 
+    acquire(&heap_lock);
     // find first block in heap with at least size space available
     struct heap_node *temp = heap_start;
     struct heap_node *prev = nullptr;
@@ -136,7 +134,8 @@ void *malloc(size_t size) {
             // If we can't cleanly split, just give them the slightly larger block
             temp->status = USED;
         }
-    
+
+        release(&heap_lock);
         return reinterpret_cast<void *>(reinterpret_cast<uint8_t *>(temp)
             + sizeof(struct heap_node));
     }
@@ -146,6 +145,7 @@ void *malloc(size_t size) {
         // increase size of current node and return it
         expand_heap(prev, size, true);
         prev->status = USED;
+        release(&heap_lock);
         return reinterpret_cast<void *>(reinterpret_cast<uint8_t *>(prev)
             + sizeof(struct heap_node));
     }
@@ -153,6 +153,7 @@ void *malloc(size_t size) {
     // make a new node and return it
     expand_heap(prev, size, false);
     prev->next->status = USED;
+    release(&heap_lock);
     return reinterpret_cast<void *>(reinterpret_cast<uint8_t *>(prev->next)
             + sizeof(struct heap_node));
 }
@@ -243,7 +244,8 @@ void *realloc(void *ptr, size_t size) {
 
     if (node->size == size)
         return ptr;
-
+        
+    acquire(&heap_lock);
     // see if we can just downsize node
     if (node->size >= size + sizeof(struct heap_node) + MIN_ALLOC_SIZE) {
         struct heap_node *new_node = reinterpret_cast<struct heap_node *>(
@@ -262,6 +264,7 @@ void *realloc(void *ptr, size_t size) {
         // try to merge new node
         try_merge_with_right(new_node);
 
+        release(&heap_lock);
         return ptr;
     }
 
@@ -279,10 +282,12 @@ void *realloc(void *ptr, size_t size) {
             // check if there is extra space to split
             if (node->size >= size + sizeof(struct heap_node) + MIN_ALLOC_SIZE)
                 split_node(node, size);
+            release(&heap_lock);
             return ptr;
         }
     }
 
+    release(&heap_lock);
     // ask for a new node
     void *new_ptr = malloc(size);
     if (new_ptr == nullptr) {

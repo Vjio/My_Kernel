@@ -1,6 +1,7 @@
 #include "pmm.hpp"
 #include "vmm.hpp"
 #include "memory.hpp"
+#include "../stdio.hpp"
 
 uint64_t l_hhdm_offset    = 0;
 uint64_t kernel_pml4_phys = 0;
@@ -17,6 +18,22 @@ struct page_indices {
 void VMM::init(uint64_t hhdm_offset) {
     l_hhdm_offset = hhdm_offset;
     kernel_pml4_phys = get_cr3() & ~0xFFFull;
+    uint64_t *pml4 = reinterpret_cast<uint64_t *>(kernel_pml4_phys + l_hhdm_offset);
+
+    if (pml4[KERNEL_HEAP_PML4_INDEX] & PTE_PRESENT) {
+        printf("kernel heap PML4 slot is already in use!\n");
+        while (true) {;}
+    }
+
+    uint64_t pdpt_phys = PMM::alloc_frame();
+    if (pdpt_phys == 0) {
+        printf("failed to allocate the kernel heap PDPT!\n");
+        while (true) {;}
+    }
+
+    // a fresh table must be zeroed otherwise garbage entries count as present mappings
+    memset(reinterpret_cast<void *>(pdpt_phys + l_hhdm_offset), 0, FRAME_SIZE);
+    pml4[KERNEL_HEAP_PML4_INDEX] = pdpt_phys | PTE_PRESENT | PTE_READ_WRITE;
 }
 
 uint64_t *VMM::get_pml4() {
