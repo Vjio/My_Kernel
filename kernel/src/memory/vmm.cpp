@@ -178,6 +178,9 @@ void VMM::unmap_and_free_page(uint64_t *pml4, uint64_t virtual_addr) {
 
 uint64_t VMM::create_address_space() {
     uint64_t new_pml4_phys = PMM::alloc_frame();
+    if (new_pml4_phys == 0)
+        return 0;
+
     uint64_t *new_pml4_virt = reinterpret_cast<uint64_t *>(new_pml4_phys + l_hhdm_offset);
     memset(new_pml4_virt, 0, FRAME_SIZE);
 

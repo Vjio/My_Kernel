@@ -65,6 +65,7 @@ class VMM {
     // walks the tables and returns the physical address for a virtual address
     static uint64_t get_physical_address(void *virtual_addr);
 
+    // returns 0 on failure
     static uint64_t create_address_space();
     static void destroy_address_space(void* root_page_table);
     static uint64_t get_hhdm_offset();
