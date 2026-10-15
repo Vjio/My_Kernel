@@ -73,6 +73,11 @@ class VMM {
     // flase -> address is invalid
     static bool validate_userland_memory(void *address, size_t length, bool require_write);
 
+    // allocated a zeroed frame at vaddr and maps it 
+    // returns a pointer the kernel can write that frame through (with HHDM) added
+    // or nullptr on failure
+    static uint8_t *map_zeroed_page(uint64_t *pml4, uint64_t vaddr, uint64_t flags);
+
     private:
     // get value at table's index
     // alocates a new frame for the index if needed

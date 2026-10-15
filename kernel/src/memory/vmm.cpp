@@ -303,3 +303,18 @@ uint64_t VMM::get_physical_address(void *addr) {
     uint64_t phys_frame = pte & ~0xFFFull;
     return phys_frame + offset;
 }
+
+uint8_t *VMM::map_zeroed_page(uint64_t *pml4, uint64_t vaddr, uint64_t flags) {
+    uint64_t phys = PMM::alloc_frame();
+    if (phys == 0)
+        return nullptr;
+
+    uint8_t *page = reinterpret_cast<uint8_t *>(phys + l_hhdm_offset);
+    memset(page, 0, FRAME_SIZE);
+
+    if (!map_page(pml4, vaddr, phys, flags)) {
+        PMM::free_frame(phys);
+        return nullptr;
+    }
+    return page;
+}
