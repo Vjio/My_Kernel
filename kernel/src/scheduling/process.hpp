@@ -101,22 +101,19 @@ inline void thread::thread_exit() {
         asm volatile("hlt");
 }
 
-// VERY IMPORTANT: as of how the kernel is currently designed, do NOT call this function! at all!
-// the kernel can only have 1 process since all kernel threads share the same address range
-// only use add_kernel_thread for kernel space programs
-struct process *create_kernel_process(char *name, void(*function)(void*), void *arg);
-// creates a user process with 1 thread. notifies the scheduler about the thread
-struct process *create_user_process(char *name, uint64_t entry_point, void *arg);
+// note: no reason to ever create a new kernel process
+// since all kernels programs will share the same address space
 
 // used by kernel. exposing this function to userspace will lead to creashes
 // creates a thread and notifies the scheduler about it
-// set proc to nullptr if you want to make a new process for the thread
-struct thread* add_kernel_thread(struct process* proc, char* name, void(*function)(void*), void* arg,
+struct thread* add_kernel_thread(char* name, void(*function)(void*), void* arg,
                                     unsigned int base_level);
+  
+// creates a user process with 1 thread. notifies the scheduler about the thread
+struct process *create_user_process(char *name, struct elf_source *src, void *arg);
 
 // creates a thread for a userpsace process and notifies the scheduler about it
-// set proc to nullptr if you want to make a new process for the thread
-struct thread* add_user_thread(struct process* proc, char* name, uint64_t entry_point, void* arg);
+struct thread* add_user_thread(char* name, uint64_t entry_point, void* arg);
 
 // maps a process struct to the current running program
 // will only be used by the kernel to make itself known to the scheduler
