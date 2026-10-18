@@ -228,17 +228,16 @@ extern "C" void syscall_handler(interrupt_frame *frame) {
         }
 
         case 56: {
-            // uint64_t clone(bool new_process_flag, char *name, uint64_t entry_point, void *arg) syscall,
-            // rdi -> new_process_flag
-            // rsi -> name
-            // rdx -> entry_point
-            // r8 -> arg
-            bool new_process_flag = static_cast<bool>(frame->rdi);
-            char *name = reinterpret_cast<char *>(frame->rsi);
-            uint64_t entry_point = frame->rdx;
-            void *arg = reinterpret_cast<void *>(frame->r8);
-
-            frame->rax = clone(new_process_flag, name, entry_point, arg);
+            // uint64_t clone(char *name, void(*function)(void*), void *arg) syscall,
+            // rdi -> name
+            // rsi -> function
+            // rdx -> arg
+            char *name = reinterpret_cast<char *>(frame->rdi);
+            void (*function)(void*) = reinterpret_cast<void (*)(void*)>(frame->rsi);
+            void *arg = reinterpret_cast<void *>(frame->rdx);
+            
+            __asm__ volatile ("sti");
+            frame->rax = clone(name, function, arg);
             break;
         }
 

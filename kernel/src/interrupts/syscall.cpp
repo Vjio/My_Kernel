@@ -6,24 +6,89 @@
 #include "stdio.hpp"
 #include "../file_system/file.hpp"
 #include "../file_system/vsfs_layout.hpp"
+#include "../userland/elf_loader.hpp"
 
 #define AT_REMOVEDIR    0x200
 #define AT_FDCWD        (-100)
 
-uint64_t clone(bool new_process_flag, char *name, uint64_t entry_point, void *arg) {
+// copies a NUL terminated string from userspace into dst
+// returns false if the pointer is bad or the string doesn't fit in dst_size
+static bool copy_path_from_user(char *dst, const char *user_src, size_t dst_size) {
+    if (user_src == nullptr)
+        return false;
+
+    for (size_t i = 0; i < dst_size; i++) {
+        if (!VMM::validate_userland_memory(const_cast<char *>(user_src + i), 1, false))
+            return false;
+
+        dst[i] = user_src[i];
+        if (dst[i] == '\0')
+            return true;
+    }
+
+    return false;
+}
+
+uint64_t clone(char *name, void(*function)(void*), void *arg) {
     // check if user given arguments are valid
     if (!VMM::validate_userland_memory(name, MAX_NAME_LEN, false))
         return static_cast<uint64_t>(-1);
 
-    if (!VMM::validate_userland_memory(reinterpret_cast<void *>(entry_point), 1, false))
+    if (!VMM::validate_userland_memory(reinterpret_cast<void *>(function), 1, false))
         return static_cast<uint64_t>(-1);
 
-    Scheduler *scheduler = Scheduler::get_current_scheduler();
-    struct thread *thread = scheduler->get_running_thread();
-    if (new_process_flag)
-        return create_user_process(name, entry_point, arg)->threads->tid;
-    else
-        return add_user_thread(thread->parent, name, entry_point, arg)->tid;
+    struct thread *new_thread =  add_user_thread(name, reinterpret_cast<uint64_t>(function), arg);
+
+    // 0 returns as failure return value becuase that is the kernel's initial thread id
+    return new_thread ? new_thread->tid : 0;
+}
+
+long spawn(char *path, void *arg) {
+    int ret = 0;
+    char path_buffer[MAX_PATH_SIZE];
+    if (!copy_path_from_user(path_buffer, path, MAX_PATH_SIZE))
+        return -1;
+
+    struct process *new_proc;
+    struct process *cur_proc = Scheduler::get_current_scheduler()->get_running_thread()->parent;
+    FileSystem *fs = cur_proc->fs;
+
+    struct inode *target = fs->path_resolver(cur_proc->cwd->inode_nr, path_buffer);
+    if (target == nullptr)
+        return -1;
+    if (target->data->type != FILE || target->data->size > MAX_ELF_SIZE) {
+        fs->inode_return(target->inode_nr);
+        return -1;
+    }
+
+    // name the program after the file
+    char *name = path_buffer;
+    for (char *c = path_buffer; *c; c++)
+        if (*c == '/')
+            name = c + 1;
+
+    uint8_t *buf = reinterpret_cast<uint8_t *>(calloc(target->data->size, 1));
+    struct elf_source elf_src;
+
+    if (buf == nullptr) {
+        ret = -1;
+        goto end;
+    }
+
+    elf_src.ctx = buf;
+    elf_src.size = target->data->size;
+
+    fs->file_read(target, buf, target->data->size, 0);
+
+    new_proc = create_user_process(name, elf_src, arg);
+    if (new_proc != nullptr)
+        ret = new_proc->pid;
+
+end:
+    free(buf);
+    if (target)
+        fs->inode_return(target->inode_nr);
+    return ret;
 }
 
 void exit() {
@@ -158,24 +223,6 @@ struct brk_ret brk(size_t length) {
     release(&proc->lock);
 
     return { reinterpret_cast<void *>(old_heap_end), aligned_len };
-}
-
-// copies a NUL terminated string from userspace into dst
-// returns false if the pointer is bad or the string doesn't fit in dst_size
-static bool copy_path_from_user(char *dst, const char *user_src, size_t dst_size) {
-    if (user_src == nullptr)
-        return false;
-
-    for (size_t i = 0; i < dst_size; i++) {
-        if (!VMM::validate_userland_memory(const_cast<char *>(user_src + i), 1, false))
-            return false;
-
-        dst[i] = user_src[i];
-        if (dst[i] == '\0')
-            return true;
-    }
-
-    return false;
 }
 
 int open(char *path, int flags) {

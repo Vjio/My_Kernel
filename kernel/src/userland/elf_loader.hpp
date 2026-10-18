@@ -2,6 +2,9 @@
 #include <stdint.h>
 #include <stddef.h>
 
+// max elf binary size - 32 MB
+#define MAX_ELF_SIZE    (32 * 1024 * 1024)
+
 // where the loader reads the ELF bytes from
 struct elf_source {
     void *ctx;
