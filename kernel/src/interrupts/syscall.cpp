@@ -80,7 +80,7 @@ long spawn(char *path, void *arg) {
 
     fs->file_read(target, buf, target->data->size, 0);
 
-    new_proc = create_user_process(name, elf_src, arg);
+    new_proc = create_user_process(name, &elf_src, arg);
     if (new_proc != nullptr)
         ret = new_proc->pid;
 
