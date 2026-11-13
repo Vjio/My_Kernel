@@ -211,8 +211,10 @@ void free(void *ptr) {
     struct heap_node *node = reinterpret_cast<struct heap_node *>(
         reinterpret_cast<uint8_t *>(ptr) - sizeof(struct heap_node));
 
+    acquire(&heap_lock);
     if (node->status == FREE) {
-        // this shouldn't really happen. could add a log
+        // this can happen if 2 threads try to free the same pointer
+        release(&heap_lock);
         return;
     }
 
@@ -223,6 +225,7 @@ void free(void *ptr) {
 
     // try to merge current node with the node to its left
     try_merge_with_left(node);
+    release(&heap_lock);
 }
 
 void *realloc(void *ptr, size_t size) {
