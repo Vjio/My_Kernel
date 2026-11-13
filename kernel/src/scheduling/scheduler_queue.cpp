@@ -11,9 +11,8 @@ void SchedulerQueue::promote_starving(Scheduler *scheduler, uint64_t interrupt_n
         temp->ready_time = interrupt_nr;
         temp->current_level++;
         // insert in next queue
-        scheduler->insert_thread(temp);
-
         pop();
+        scheduler->insert_thread(temp);
         temp = head;
     }    
 }
