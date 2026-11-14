@@ -285,14 +285,13 @@ bool VMM::validate_userland_memory(void *address, size_t length, bool require_wr
     return true;
 }
 
-uint64_t VMM::get_physical_address(void *addr) {
+uint64_t VMM::get_physical_address(uint64_t *pml4, void *addr) {
+    if (pml4 == nullptr || addr == nullptr)
+        return 0;
+
     uint64_t virtual_addr = reinterpret_cast<uint64_t>(addr);
     struct page_indices idx = get_indices(virtual_addr);
     uint64_t offset = virtual_addr & 0xFFF; 
-
-    uint64_t *pml4 = VMM::get_pml4();
-    if (pml4 == nullptr)
-        return 0;
 
     uint64_t *pt = walk_to_pt(pml4, idx);
     if (pt == nullptr) 
