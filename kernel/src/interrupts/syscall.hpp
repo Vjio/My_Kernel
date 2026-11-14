@@ -23,7 +23,12 @@ struct brk_ret {
 // makes a new thread for the current process
 // returns 0 on failure
 uint64_t clone(char *name, void(*function)(void*), void *arg);
-uint64_t spawn(char *name, char *path, void *arg);
+// starts the ELF at path as a new process, named after the file
+// argv is a NULL terminated array of NUL terminated strings (NULL is the same as an empty argv).
+// at most MAX_ARGC strings and MAX_ARG_BYTES bytes in total
+// the child's main gets argc in rdi and argv in rsi
+// returns the new pid on success, -1 on failure
+long spawn(char *path, char *argv[]);
 
 void exit();
 void sleep(uint64_t ticks);

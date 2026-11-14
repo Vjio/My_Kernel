@@ -12,21 +12,71 @@
 #define AT_FDCWD        (-100)
 
 // copies a NUL terminated string from userspace into dst
-// returns false if the pointer is bad or the string doesn't fit in dst_size
-static bool copy_path_from_user(char *dst, const char *user_src, size_t dst_size) {
+// returns the length of the string plus the NULL character
+// returns 0 if the pointer is bad or the string doesn't fit in dst_size
+static bool copy_string_from_user(char *dst, const char *user_src, size_t dst_size) {
     if (user_src == nullptr)
-        return false;
+        return 0;
 
     for (size_t i = 0; i < dst_size; i++) {
         if (!VMM::validate_userland_memory(const_cast<char *>(user_src + i), 1, false))
-            return false;
+            return 0;
 
         dst[i] = user_src[i];
         if (dst[i] == '\0')
-            return true;
+            return i+1;
     }
 
-    return false;
+    return 0;
+}
+
+// copies a NULL terminated argv array from userspace into args
+// returns false if a pointer is bad, there are more than MAX_ARGC entries or
+// the strings don't fit in MAX_ARG_BYTES
+static bool copy_argv_from_user(struct spawn_args *args, char *user_argv[]) {
+    args->argc = 0;
+    args->strings_size = 0;
+
+    // a NULL argv is the same as an empty one
+    if (user_argv == nullptr)
+        return true;
+
+    for (;;) {
+        // the array itself lives in userspace too
+        if (!VMM::validate_userland_memory(&user_argv[args->argc], sizeof(char *), false))
+            return false;
+
+        const char *user_str = user_argv[args->argc];
+        if (user_str == nullptr)
+            return true;
+
+        if (args->argc == MAX_ARGC)
+            return false;
+
+        size_t copied = copy_string_from_user(args->strings + args->strings_size, user_str,
+                                              MAX_ARG_BYTES - args->strings_size);
+        if (copied == 0)
+            return false;
+
+        args->strings_size += copied;
+        args->argc++;
+    }
+}
+
+// reads a whole file into buf. buf must hold file->data->size bytes
+static bool read_whole_file(FileSystem *fs, struct inode *file, uint8_t *buf) {
+    uint64_t size = file->data->size;
+    uint64_t done = 0;
+
+    // file_read can return less than asked for, so keep going until everything gets read
+    while (done < size) {
+        uint64_t ret = fs->file_read(file, buf + done, size - done, done);
+        if (ret == 0)
+            return false;
+        done += ret;
+    }
+
+    return true;
 }
 
 uint64_t clone(char *name, void(*function)(void*), void *arg) {
@@ -43,49 +93,63 @@ uint64_t clone(char *name, void(*function)(void*), void *arg) {
     return new_thread ? new_thread->tid : 0;
 }
 
-long spawn(char *path, void *arg) {
-    int ret = 0;
-    char path_buffer[MAX_PATH_SIZE];
-    if (!copy_path_from_user(path_buffer, path, MAX_PATH_SIZE))
-        return -1;
-
+long spawn(char *path, char *argv[]) {
+    struct spawn_args *args;
+    struct inode *target = nullptr;
+    struct elf_source elf_src;
     struct process *new_proc;
+    long ret = -1;
+    char path_buffer[MAX_PATH_SIZE];
+    char name[MAX_NAME_LEN] = {};
+    const char *base;
+    uint8_t *buf = nullptr;
+
     struct process *cur_proc = Scheduler::get_current_scheduler()->get_running_thread()->parent;
     FileSystem *fs = cur_proc->fs;
 
-    struct inode *target = fs->path_resolver(cur_proc->cwd->inode_nr, path_buffer);
-    if (target == nullptr)
+    if (copy_string_from_user(path_buffer, path, MAX_PATH_SIZE) == 0)
         return -1;
-    if (target->data->type != FILE || target->data->size > MAX_ELF_SIZE) {
-        fs->inode_return(target->inode_nr);
+
+    // spawn_args is MAX_ARG_BYTES big. keep it off the syscall's kernel stack
+    args = reinterpret_cast<struct spawn_args *>(calloc(1, sizeof(struct spawn_args)));
+    if (args == nullptr)
         return -1;
-    }
 
-    // name the program after the file
-    char *name = path_buffer;
-    for (char *c = path_buffer; *c; c++)
-        if (*c == '/')
-            name = c + 1;
-
-    uint8_t *buf = reinterpret_cast<uint8_t *>(calloc(target->data->size, 1));
-    struct elf_source elf_src;
-
-    if (buf == nullptr) {
-        ret = -1;
+    if (!copy_argv_from_user(args, argv))
         goto end;
-    }
+
+    target = fs->path_resolver(cur_proc->cwd->inode_nr, path_buffer);
+    if (target == nullptr)
+        goto end;
+    if (target->data->type != FILE || target->data->size == 0 ||
+        target->data->size > MAX_ELF_SIZE)
+        goto end;
+
+    // name the program after the file. name is zeroed, so it always ends in a NUL
+    base = path_buffer;
+    for (const char *c = path_buffer; *c; c++)
+        if (*c == '/')
+            base = c + 1;
+    for (size_t i = 0; i < MAX_NAME_LEN - 1 && base[i]; i++)
+        name[i] = base[i];
+
+    buf = reinterpret_cast<uint8_t *>(calloc(target->data->size, 1));
+    if (buf == nullptr)
+        goto end;
+
+    if (!read_whole_file(fs, target, buf))
+        goto end;
 
     elf_src.ctx = buf;
     elf_src.size = target->data->size;
 
-    fs->file_read(target, buf, target->data->size, 0);
-
-    new_proc = create_user_process(name, &elf_src, arg);
+    new_proc = create_user_process(name, &elf_src, args);
     if (new_proc != nullptr)
         ret = new_proc->pid;
 
 end:
     free(buf);
+    free(args);
     if (target)
         fs->inode_return(target->inode_nr);
     return ret;
@@ -369,8 +433,8 @@ int renameat(int old_dir_fd, char *old_path, int new_dir_fd, char *new_path) {
 
     char kernel_old_path[MAX_PATH_SIZE];
     char kernel_new_path[MAX_PATH_SIZE];
-    if (!copy_path_from_user(kernel_old_path, old_path, sizeof(kernel_old_path)) ||
-        !copy_path_from_user(kernel_new_path, new_path, sizeof(kernel_new_path)))
+    if (copy_string_from_user(kernel_old_path, old_path, sizeof(kernel_old_path)) == 0 ||
+        copy_string_from_user(kernel_new_path, new_path, sizeof(kernel_new_path)) == 0)
         return -1;
 
     uint32_t old_base = at_base_inode(running_process, old_dir_fd);
@@ -391,8 +455,8 @@ int linkat(int old_dir_fd, char *old_path, int new_dir_fd, char *new_path, int f
 
     char kernel_old_path[MAX_PATH_SIZE];
     char kernel_new_path[MAX_PATH_SIZE];
-    if (!copy_path_from_user(kernel_old_path, old_path, sizeof(kernel_old_path)) ||
-        !copy_path_from_user(kernel_new_path, new_path, sizeof(kernel_new_path)))
+    if (!copy_string_from_user(kernel_old_path, old_path, sizeof(kernel_old_path)) == 0 ||
+        !copy_string_from_user(kernel_new_path, new_path, sizeof(kernel_new_path)) == 0)
         return -1;
 
     uint32_t old_base = at_base_inode(running_process, old_dir_fd);
@@ -409,7 +473,7 @@ int mkdir(char *path) {
     FileSystem *fs = running_process->fs;
 
     char kernel_path[MAX_PATH_SIZE];
-    if (!copy_path_from_user(kernel_path, path, sizeof(kernel_path)))
+    if (copy_string_from_user(kernel_path, path, sizeof(kernel_path)) == 0)
         return -1;
 
     return fs->mkdir_path(running_process->cwd->inode_nr, kernel_path) ? 0 : -1;
@@ -424,7 +488,7 @@ int unlinkat(int dir_fd, char *path, int flags) {
     FileSystem *fs = running_process->fs;
 
     char kernel_path[MAX_PATH_SIZE];
-    if (!copy_path_from_user(kernel_path, path, sizeof(kernel_path)))
+    if (copy_string_from_user(kernel_path, path, sizeof(kernel_path)) == 0)
         return -1;
 
     uint32_t base = at_base_inode(running_process, dir_fd);

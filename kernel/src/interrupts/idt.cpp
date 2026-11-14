@@ -249,24 +249,75 @@ extern "C" void syscall_handler(interrupt_frame *frame) {
             break;
         }
 
+        case 83: {
+            // int mkdir(char *path)
+            // rdi -> path
+            char *path = reinterpret_cast<char *>(frame->rdi);
+
+            __asm__ volatile ("sti");
+            frame->rax = mkdir(path);
+            break;
+        }
+
+        case 263: {
+            // int unlinkat(int dir_fd, char *path, int flags)
+            // rdi -> dir_fd
+            // rsi -> path
+            // rdx -> flags
+            int dir_fd = frame->rdi;
+            char *path = reinterpret_cast<char *>(frame->rsi);
+            int flags = frame->rdx;
+
+            __asm__ volatile ("sti");
+            frame->rax = unlinkat(dir_fd, path, flags);
+            break;
+        }
+
         case 264: {
             // int renameat(int old_dir_fd, char *old_name, int new_dir_fd, char *new_name);
             // rdi -> old_dir_fd
             // rsi -> old_name
             // rdx -> new_dir_fd
-            // r8 -> new_name
+            // rcx -> new_name
             int old_dir_fd = frame->rdi;
             char *old_name = reinterpret_cast<char *>(frame->rsi);
             int new_dir_fd = frame->rdx;
-            char *new_name = reinterpret_cast<char *>(frame->r8);
+            char *new_name = reinterpret_cast<char *>(frame->rcx);
 
             __asm__ volatile ("sti");
             frame->rax = renameat(old_dir_fd, old_name, new_dir_fd, new_name);
             break;
         }
 
-        case 265: {
-            
+        case 265: {  
+            // int linkat(int old_dir_fd, char *old_path, int new_dir_fd, char *new_path, int flags)
+            // userland stubs keep the SysV argument registers, so:
+            // rdi -> old_dir_fd
+            // rsi -> old_path
+            // rdx -> new_dir_fd
+            // rcx -> new_path
+            // r8  -> flags
+            int old_dir_fd = frame->rdi;
+            char *old_path = reinterpret_cast<char *>(frame->rsi);
+            int new_dir_fd = frame->rdx;
+            char *new_path = reinterpret_cast<char *>(frame->rcx);
+            int flags = frame->r8;
+
+            __asm__ volatile ("sti");
+            frame->rax = linkat(old_dir_fd, old_path, new_dir_fd, new_path, flags);
+            break;
+        }
+
+        case 500: {
+            // long spawn(char *path, char *argv[])
+            // rdi -> path
+            // rsi -> argv (NULL terminated array of NUL terminated strings)
+            char *path = reinterpret_cast<char *>(frame->rdi);
+            char **argv = reinterpret_cast<char **>(frame->rsi);
+
+            __asm__ volatile ("sti");
+            frame->rax = spawn(path, argv);
+            break;
         }
 
         default:
