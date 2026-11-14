@@ -23,6 +23,8 @@
 #include "file_system/drive.hpp"
 #include "file_system/sata.hpp"
 #include "file_system/file.hpp"
+#include "userland/elf_loader.hpp"
+#include "keyboard/keyboard_driver.hpp"
 
 // Set the base revision to 6, this is recommended as this is the latest
 // base revision described by the Limine boot protocol specification.
@@ -69,6 +71,15 @@ volatile struct limine_memmap_request memmap_request = {
     .id = LIMINE_MEMMAP_REQUEST_ID,
     .revision = 0,
     .response = nullptr
+};
+
+__attribute__((used, section(".limine_requests")))
+static volatile struct limine_module_request module_request = {
+    .id = LIMINE_MODULE_REQUEST_ID,
+    .revision = 0,
+    .response = nullptr,
+    .internal_module_count = 0,
+    .internal_modules = nullptr
 };
 
 }
@@ -126,6 +137,8 @@ struct flanterm_context *ft_ctx = nullptr;
 // if you ever need to interact with the kernel process struct, ask the scheduler for it
 // (scheduler::get_running_thread). do not use this struct!
 struct process kernel_process;
+
+KeyboardDriver *g_keyboard_driver = nullptr;
 
 // END GLOBALS
 
@@ -250,6 +263,8 @@ extern "C" void kmain() {
     PMM::init_PMM(memmap_request.response, hhdm_request.response->offset);
     VMM::init(hhdm_request.response->offset);
 
+    g_keyboard_driver = new KeyboardDriver();
+
     populate_kernel_process_struct(&kernel_process);
     heap_init(hhdm_request.response->offset, &kernel_process);
 
@@ -294,6 +309,14 @@ extern "C" void kmain() {
     // TODO: once stdin, stdout etc are added to all programs
     // add it to kernel program too
 
+    // struct elf_memory_image img;
+    // img.base = reinterpret_cast<const uint8_t *>(module_request.response->modules[0]->address);
+    // img.size = module_request.response->modules[0]->size;
+
+    // struct elf_source source = elf_source_from_memory(&img);
+    // create_user_process("proc", &source, nullptr);
+
     // We're done, just hang...
+    // kernel_thread->base_level = 1;
     hcf();
 }

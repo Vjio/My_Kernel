@@ -44,6 +44,10 @@ Working on:
 - cli
 - SMP
 
+## Documentation
+
+The project doesn't have extensive documentation yet. You can find in some of the subsystems READMEs or diagrams explaining the design of the modules. The headers also hold documentation about the purpose and behaviour of every function.
+
 ## Acknowledgements
 
 This project wouldn't be possible without the resources and tools listed below:

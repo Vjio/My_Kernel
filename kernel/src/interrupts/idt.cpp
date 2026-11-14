@@ -6,6 +6,7 @@
 #include "scheduling/scheduler.hpp"
 #include "gdt.hpp"
 #include "../file_system/drive.hpp"
+#include "../keyboard/keyboard_scancode_handler.hpp"
 
 // you will notice a lot of "manually" written large arrays of data.
 // there were smarter ways to do this. i just asked ai to generate them for me
@@ -120,9 +121,10 @@ extern "C" void irq_handler(interrupt_frame *frame) {
     if (irq == 0) { // timer interrupt
         Scheduler::get_current_scheduler()->schedule(frame);
     }
-    
+
     else if (irq == 1) { // keyboard
         uint8_t scancode = inb(0x60);
+        handle_scancode(scancode);
         printf("Keyboard interrupt! scancode=0x%x\n", scancode);
     }
 
