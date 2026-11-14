@@ -14,6 +14,20 @@
 #define STACK_GUARD_SIZE    FRAME_SIZE
 #define HEAP_BASE           0x0000500000000000ULL
 
+// limits for the argv a new process can be started with
+#define MAX_ARGC            32
+// total size of every argv string, NUL terminators included
+#define MAX_ARG_BYTES       4096
+
+// argv as the kernel holds it between the spawn syscall and the child's first instruction.
+// strings are packed back to back in argv order, each one NUL terminated
+struct spawn_args {
+    int argc;
+    // size of all strings in bytes
+    size_t strings_size;
+    char strings[MAX_ARG_BYTES];
+};
+
 typedef enum {
     READY,
     RUNNING,
@@ -110,7 +124,8 @@ struct thread* add_kernel_thread(char* name, void(*function)(void*), void* arg,
                                     unsigned int base_level);
   
 // creates a user process with 1 thread. notifies the scheduler about the thread
-struct process *create_user_process(char *name, struct elf_source *src, void *arg);
+struct process *create_user_process(char *name, struct elf_source *src,
+                    struct spawn_args *args);
 
 // creates a thread for a userpsace process and notifies the scheduler about it
 struct thread* add_user_thread(char* name, uint64_t entry_point, void* arg);

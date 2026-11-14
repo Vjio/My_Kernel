@@ -50,6 +50,80 @@ static void destroy_unstarted_process(struct process *process) {
     free(process);
 }
 
+// copies len bytes into a process' address space that is not running yet
+// every page in [user_addr, user_addr + len) must already be mapped
+static bool copy_to_user_space(struct process *proc, uint64_t user_addr, void *src,
+                               size_t len) {
+    const uint8_t *src_char = reinterpret_cast<const uint8_t *>(src);
+    uint64_t *pml4 = reinterpret_cast<uint64_t *>(proc->root_page_table);
+
+    while (len > 0) {
+        uint64_t phys = VMM::get_physical_address(pml4, reinterpret_cast<void *>(user_addr));
+        if (phys == 0)
+            return false;
+
+        // ensure we don't cross into the next page
+        size_t chunk = FRAME_SIZE - (user_addr % FRAME_SIZE);
+        if (chunk > len)
+            chunk = len;
+
+        memcpy(reinterpret_cast<void *>(phys + VMM::get_hhdm_offset()), src_char, chunk);
+
+        src_char += chunk;
+        user_addr += chunk;
+        len -= chunk;
+    }
+
+    return true;
+}
+
+// writes argv at the top of the thread's (not yet running) stack and points rsp below it
+//
+//   high addresses
+//   +--------------------+  <- old rsp (top of stack)
+//   | arg strings        |  packed, same order as argv
+//   +--------------------+
+//   | padding            |
+//   +--------------------+
+//   | NULL               |  argv terminator
+//   | argv[argc - 1]     |
+//   | ...                |  pointers into the strings above
+//   | argv[0]            |  <- argv points here, and this is also the new rsp
+//   +--------------------+
+//   low addresses
+//
+// the thread starts with argc in rdi and argv in rsi, so crt0 can hand them straight to main
+static bool setup_user_stack(struct process *proc, struct thread *thread,
+                struct spawn_args *args) {
+    int argc = args ? args->argc : 0;
+    size_t bytes = args ? args->strings_size : 0;
+
+    uint64_t strings_addr = thread->int_frame.rsp - bytes;
+    uint64_t argv_size = (static_cast<uint64_t>(argc) + 1) * sizeof(uint64_t);
+    uint64_t argv_addr = (strings_addr - argv_size) & ~0xFull;
+
+    // make the pointer array
+    uint64_t pointers[MAX_ARGC + 1];
+    size_t offset = 0;
+    for (int i = 0; i < argc; i++) {
+        pointers[i] = strings_addr + offset;
+        while (args->strings[offset++] != '\0');
+    }
+    pointers[argc] = 0;
+
+    // write the strings
+    if (bytes > 0 && !copy_to_user_space(proc, strings_addr, args->strings, bytes))
+        return false;
+    // write the pointers to the strings
+    if (!copy_to_user_space(proc, argv_addr, pointers, argv_size))
+        return false;
+
+    // update registers
+    thread->int_frame.rsp = argv_addr;
+    thread->int_frame.rdi = argc;
+    thread->int_frame.rsi = argv_addr;
+    return true;
+}
 
 // allocated memory and sets thread's inner flags
 static struct thread *add_thread_common(struct process *proc, char *name) {
@@ -164,9 +238,10 @@ struct thread *add_kernel_thread(char *name, void(*function)(void*),
 }
 
 static struct thread *create_user_thread(struct process *proc, char *name,
-    uint64_t entry_point, void *arg);
+    uint64_t entry_point);
 
-struct process *create_user_process(char *name, struct elf_source *src, void *arg) {
+struct process *create_user_process(char *name, struct elf_source *src,
+                    struct spawn_args *args) {
     struct process* process = create_process_common(name);
     if (process == nullptr)
         return nullptr;
@@ -180,14 +255,18 @@ struct process *create_user_process(char *name, struct elf_source *src, void *ar
         return nullptr;
     }
 
-    struct thread *thread = create_user_thread(process, name, entry, arg);
+    struct thread *thread = create_user_thread(process, name, entry);
     if (thread == nullptr) {
         destroy_unstarted_process(process);
         return nullptr;
     }
 
-    // TODO: set up stack
-    // later: write argv/envp onto the new stack and adjust thread->int_frame.rsp here
+    // TODO: envp
+    if (!setup_user_stack(process, thread, args)) {
+        destroy_thread(process, thread);
+        destroy_unstarted_process(process);
+        return nullptr;
+    }
 
     acquire(&process->lock);
     link_and_schedule(process, thread);
@@ -198,7 +277,7 @@ struct process *create_user_process(char *name, struct elf_source *src, void *ar
 
 // creates a thread (allocated memory, fills the structure)
 static struct thread *create_user_thread(struct process *proc, char *name,
-        uint64_t entry_point, void *arg) {
+        uint64_t entry_point) {
     acquire(&proc->lock);
     struct thread *thread = add_thread_common(proc, name);
     if (thread == nullptr) {
@@ -212,7 +291,6 @@ static struct thread *create_user_thread(struct process *proc, char *name,
     thread->int_frame.cs = GDT_USER_CODE;
     thread->int_frame.ss = GDT_USER_DATA;
     thread->int_frame.rip = entry_point;
-    thread->int_frame.rdi = (uint64_t)arg;
 
     // ring0 landing stack
     thread->kernel_stack = malloc(STACK_SIZE);
@@ -238,9 +316,11 @@ static struct thread *create_user_thread(struct process *proc, char *name,
 
 struct thread *add_user_thread(char *name, uint64_t entry_point, void *arg) {
     struct process *proc = Scheduler::get_current_scheduler()->get_running_thread()->parent;
-    struct thread *thread = create_user_thread(proc, name, entry_point, arg);
+    struct thread *thread = create_user_thread(proc, name, entry_point);
     if (thread == nullptr)
         return nullptr;
+
+    thread->int_frame.rdi = (uint64_t)arg;
 
     acquire(&proc->lock);
     link_and_schedule(proc, thread);
