@@ -259,6 +259,20 @@ extern "C" void syscall_handler(interrupt_frame *frame) {
             break;
         }
 
+        case 217: {
+            // int getdents(int fd, struct dirent *buf, size_t max_entries)
+            // rdi -> fd
+            // rsi -> buf
+            // rdx -> max_entries
+            int fd = frame->rdi;
+            struct dirent *buf = reinterpret_cast<struct dirent *>(frame->rsi);
+            size_t max_entries = frame->rdx;
+
+            __asm__ volatile ("sti");
+            frame->rax = getdents(fd, buf, max_entries);
+            break;
+        }
+
         case 263: {
             // int unlinkat(int dir_fd, char *path, int flags)
             // rdi -> dir_fd

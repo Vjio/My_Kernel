@@ -14,7 +14,7 @@
 // copies a NUL terminated string from userspace into dst
 // returns the length of the string plus the NULL character
 // returns 0 if the pointer is bad or the string doesn't fit in dst_size
-static bool copy_string_from_user(char *dst, const char *user_src, size_t dst_size) {
+static size_t copy_string_from_user(char *dst, const char *user_src, size_t dst_size) {
     if (user_src == nullptr)
         return 0;
 
@@ -496,4 +496,65 @@ int unlinkat(int dir_fd, char *path, int flags) {
         return -1;
 
     return fs->unlink_path(base, kernel_path, (flags & AT_REMOVEDIR) != 0) ? 0 : -1;
+}
+
+int getdents(int fd, struct dirent *buf, size_t max_entries) {
+    if (fd < 0 || fd >= MAX_FILE_FD || max_entries == 0)
+        return -1;
+
+    if (max_entries > GETDENTS_MAX_ENTRIES)
+        max_entries = GETDENTS_MAX_ENTRIES;
+
+    if (!VMM::validate_userland_memory(buf, max_entries * sizeof(struct dirent), true))
+        return -1;
+
+    struct thread *running_thread = Scheduler::get_current_scheduler()->get_running_thread();
+    struct process *running_process = running_thread->parent;
+    FileSystem *fs = running_process->fs;
+    struct file *file = running_process->fds[fd];
+
+    if (!file || file->ip->data->type != DIR)
+        return -1;
+
+    // only hold the lock while making a copy of the cursor
+    acquire(&file->lock);
+    uint64_t off = file->off;
+    release(&file->lock);
+
+    if (off % sizeof(struct entry) != 0)
+        return -1;
+
+    uint32_t entry_nr = 0;
+    struct entry *entries = fs->readdir(file->ip, &entry_nr);
+    if (entries == nullptr)
+        return -1;
+
+    uint64_t start = off / sizeof(struct entry);
+    if (start >= entry_nr) {
+        free(entries);
+        return 0;
+    }
+
+    uint64_t n = entry_nr - start;
+    if (n > max_entries)
+        n = max_entries;
+
+    for (uint64_t i = 0; i < n; i++) {
+        const struct entry *src = &entries[start + i];
+
+        buf[i].inode_nr = src->inode_nr;
+
+        size_t j = 0;
+        for (; j < DIRENT_NAME_MAX - 1 && src->name[j] != '\0'; j++)
+            buf[i].name[j] = src->name[j];
+        buf[i].name[j] = '\0';
+    }
+
+    free(entries);
+
+    acquire(&file->lock);
+    file->off = off + n * sizeof(struct entry);
+    release(&file->lock);
+
+    return static_cast<int>(n);
 }

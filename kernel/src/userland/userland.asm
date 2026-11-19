@@ -20,6 +20,7 @@ global sys_unlinkat
 global sys_renameat
 global sys_linkat
 global sys_spawn
+global sys_getdents
 
 ; long sys_read(int fd, void *buf, size_t count)
 ; rdi -> fd, rsi -> buf, rdx -> count
@@ -101,6 +102,14 @@ sys_exit:
 ; returns 0 on success, -1 on failure
 sys_mkdir:
     mov rax, 83
+    int 0x80
+    ret
+
+; int sys_getdents(int fd, struct dirent *buf, size_t max_entries)
+; rdi -> fd, rsi -> buf, rdx -> max_entries
+; returns the number of entries written, 0 at the end of the directory, -1 on failure
+sys_getdents:
+    mov rax, 217
     int 0x80
     ret
 

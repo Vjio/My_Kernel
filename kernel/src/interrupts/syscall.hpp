@@ -15,6 +15,16 @@
 // file offset is set to the size of the file plus offset bytes
 #define SEEK_END        2
 
+#define DIRENT_NAME_MAX         64
+// most entries a single getdents call will return
+#define GETDENTS_MAX_ENTRIES    64
+
+// mirror of entry struct defined in vsfs_layout
+struct dirent {
+    uint32_t inode_nr;
+    char name[DIRENT_NAME_MAX];
+};
+
 struct brk_ret {
     void *address;
     uint64_t length;
@@ -57,3 +67,8 @@ int mkdir(char *path);
 // flags is 0 for files, AT_REMOVEDIR for empty directories
 // returns 0 on success, -1 on failure
 int unlinkat(int dir_fd, char *path, int flags);
+
+// reads up to max_entries entries of the directory open at fd into buf
+// at most GETDENTS_MAX_ENTRIES are returned per call, "." and ".." are included
+// returns the number of entries written, 0 at the end of the directory, -1 on failure
+int getdents(int fd, struct dirent *buf, size_t max_entries);

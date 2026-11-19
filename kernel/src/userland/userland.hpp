@@ -2,9 +2,17 @@
 #include <stdint.h>
 #include <stddef.h>
 
+#define DIRENT_NAME_MAX         64
+#define GETDENTS_MAX_ENTRIES    64
+
 struct brk_ret {
     void *address;
     uint64_t length;
+};
+
+struct dirent {
+    uint32_t inode_nr;
+    char name[DIRENT_NAME_MAX];
 };
 
 extern "C" {
@@ -31,4 +39,7 @@ extern "C" {
     int sys_linkat(int old_dir_fd, char *old_path, int new_dir_fd, char *new_path, int flags);
     // returns the new pid on success, -1 on failure
     long sys_spawn(char *path, char *argv[]);
+    // reads up to max_entries (at most GETDENTS_MAX_ENTRIES) entries of the directory
+    // returns the number of entries written, 0 at the end of the directory, -1 on failure
+    int sys_getdents(int fd, struct dirent *buf, size_t max_entries);
 }
