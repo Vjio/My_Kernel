@@ -4,3 +4,5 @@
 *.hdd
 serial.log
 disk.img
+.gdb_history
+*.o
