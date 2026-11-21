@@ -74,7 +74,7 @@ struct thread *SchedulerQueue::extract_ready_thread() {
         free(temp->stack_base);
         free(temp->kernel_stack);
         if (temp->parent->nr_of_threads == 0) {
-            VMM::destroy_address_space(temp->parent->root_page_table);
+            VMM::destroy_address_space(temp->parent->phys_page_table);
             free(temp->parent);
         }
         free(temp);
@@ -102,7 +102,7 @@ struct thread *SchedulerQueue::extract_ready_thread() {
             free(next_thread->kernel_stack);
             free(next_thread->stack_base);
             if (next_thread->parent->nr_of_threads == 0) {
-                VMM::destroy_address_space(next_thread->parent->root_page_table);
+                VMM::destroy_address_space(next_thread->parent->phys_page_table);
                 free(next_thread->parent);
             }
             free(next_thread);

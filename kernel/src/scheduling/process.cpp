@@ -46,7 +46,7 @@ static void destroy_unstarted_process(struct process *process) {
     }
     process->fs->inode_return(process->cwd->inode_nr);
 
-    VMM::destroy_address_space(process->root_page_table);
+    VMM::destroy_address_space(process->phys_page_table);
     free(process);
 }
 
@@ -55,10 +55,9 @@ static void destroy_unstarted_process(struct process *process) {
 static bool copy_to_user_space(struct process *proc, uint64_t user_addr, void *src,
                                size_t len) {
     const uint8_t *src_char = reinterpret_cast<const uint8_t *>(src);
-    uint64_t *pml4 = reinterpret_cast<uint64_t *>(proc->root_page_table);
 
     while (len > 0) {
-        uint64_t phys = VMM::get_physical_address(pml4, reinterpret_cast<void *>(user_addr));
+        uint64_t phys = VMM::get_physical_address(proc->phys_page_table, reinterpret_cast<void *>(user_addr));
         if (phys == 0)
             return false;
 
@@ -183,7 +182,7 @@ struct process *create_process_common(char *name) {
         free(process);
         return nullptr;
     }
-    process->root_page_table = reinterpret_cast<void *>(pml4_phys);
+    process->phys_page_table = pml4_phys;
 
     // TODO: add stdin, stdout and stderr to every process
 
@@ -250,7 +249,7 @@ struct process *create_user_process(char *name, struct elf_source *src,
     heap_init(VMM::get_hhdm_offset(), process);
 
     uint64_t entry;
-    if (!load_elf(reinterpret_cast<uint64_t *>(process->root_page_table), src, &entry)) {
+    if (!load_elf(process->phys_page_table, src, &entry)) {
         destroy_unstarted_process(process);
         return nullptr;
     }
@@ -302,7 +301,7 @@ static struct thread *create_user_thread(struct process *proc, char *name,
     // compute each thread stack's offset
     uint64_t stack_top = USER_STACK_TOP - (STACK_SIZE + STACK_GUARD_SIZE) * slot;
     // map ring3 stack
-    if (!VMM::map_pages(reinterpret_cast<uint64_t *>(proc->root_page_table), stack_top - STACK_SIZE,
+    if (!VMM::map_pages(proc->phys_page_table, stack_top - STACK_SIZE,
         STACK_SIZE / FRAME_SIZE, PTE_PRESENT | PTE_READ_WRITE | PTE_USER)) {
             printf("thread stack init failed!\n");
             destroy_thread(proc, thread);
@@ -358,7 +357,7 @@ struct process *make_current_execution_process(char* name) {
 }
 
 void populate_kernel_process_struct(struct process *proc) {
-    proc->root_page_table = reinterpret_cast<void *>(get_cr3() & ~0xFFFull);
+    proc->phys_page_table = (get_cr3() & ~0xFFFull);
     // heap_end gets set by heap_init()
     proc->heap_end = 0;
     proc->threads = nullptr;

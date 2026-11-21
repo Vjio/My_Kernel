@@ -85,7 +85,7 @@ struct process {
     struct file *fds[MAX_FILE_FD];
     struct inode *cwd;
     FileSystem *fs;
-    void* root_page_table;
+    uint64_t phys_page_table;
     struct thread* threads;
     // current end of the process' heap. not keeping this alligned to FRAME_SIZE
     // will lead to undefined behaviour

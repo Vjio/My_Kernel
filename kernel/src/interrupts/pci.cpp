@@ -38,7 +38,7 @@ uint64_t find_ahci_controller(uint64_t hhdm_offset) {
                     pci_dev->command |= (1 << 2) | (1 << 1); 
 
                     uint64_t abar_virt = abar_phys + hhdm_offset;
-                    VMM::map_page(nullptr, abar_virt, abar_phys, 
+                    VMM::map_page(0, abar_virt, abar_phys, 
                                   PTE_PRESENT | PTE_READ_WRITE | PTE_CACHE_DISABLE);
 
                     // store interrupt line in driver class

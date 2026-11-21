@@ -118,7 +118,7 @@ void Scheduler::every_tick(struct interrupt_frame *frame) {
     if (running_thread == nullptr)
         running_thread = dummy;
 
-    uint64_t new_cr3 = reinterpret_cast<uint64_t>(running_thread->parent->root_page_table);
+    uint64_t new_cr3 = running_thread->parent->phys_page_table;
     if (new_cr3 != get_cr3())
         load_cr3(new_cr3);
     running_thread->status = RUNNING;

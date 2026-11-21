@@ -100,12 +100,13 @@ uint64_t *VMM::get_page_table_index(uint64_t* table, uint64_t index) {
     return reinterpret_cast<uint64_t *>(next_level_phys + l_hhdm_offset);
 }
 
-bool VMM::map_page(uint64_t *pml4, uint64_t virtual_addr, uint64_t physical_addr,
-    uint64_t flags) {
-    if (pml4 == nullptr)
+bool VMM::map_page(uint64_t pml4_phys, uint64_t virtual_addr, uint64_t physical_addr,
+        uint64_t flags) {
+    uint64_t *pml4;
+    if (pml4_phys == 0)
         pml4 = VMM::get_pml4();
-    else 
-        pml4 = reinterpret_cast<uint64_t*>(reinterpret_cast<uint64_t>(pml4) + l_hhdm_offset);
+    else
+        pml4 = reinterpret_cast<uint64_t*>(reinterpret_cast<uint64_t>(pml4_phys) + l_hhdm_offset);
 
     bool allocated_frame = false;
     if (physical_addr == 0) {
@@ -136,11 +137,11 @@ bool VMM::map_page(uint64_t *pml4, uint64_t virtual_addr, uint64_t physical_addr
     return true;
 }
 
-bool VMM::map_pages(uint64_t *pml4, uint64_t virtual_addr, uint64_t nr_of_pages, uint64_t flags) {
+bool VMM::map_pages(uint64_t pml4_phys, uint64_t virtual_addr, uint64_t nr_of_pages, uint64_t flags) {
     for (uint64_t i = 0; i < nr_of_pages; i++) {
-        if (!VMM::map_page(pml4, virtual_addr + i * FRAME_SIZE, 0, flags)) {
+        if (!VMM::map_page(pml4_phys, virtual_addr + i * FRAME_SIZE, 0, flags)) {
             for (uint64_t j = 0; j < i; j++)
-                VMM::unmap_and_free_page(pml4, virtual_addr + j * FRAME_SIZE);
+                VMM::unmap_and_free_page(pml4_phys, virtual_addr + j * FRAME_SIZE);
             return false;
         }
     }
@@ -161,15 +162,21 @@ static uint64_t clear_pte_and_get_phys(uint64_t *pml4, uint64_t virtual_addr) {
     return phys;
 }
 
-void VMM::unmap_page(uint64_t *pml4, uint64_t virtual_addr) {
-    if (pml4 == nullptr)
+void VMM::unmap_page(uint64_t pml4_phys, uint64_t virtual_addr) {
+    uint64_t *pml4;
+    if (pml4_phys == 0) 
         pml4 = VMM::get_pml4();
+    else
+        pml4 = reinterpret_cast<uint64_t*>(reinterpret_cast<uint64_t>(pml4_phys) + l_hhdm_offset);
     clear_pte_and_get_phys(pml4, virtual_addr);
 }
 
-void VMM::unmap_and_free_page(uint64_t *pml4, uint64_t virtual_addr) {
-    if (pml4 == nullptr) 
+void VMM::unmap_and_free_page(uint64_t pml4_phys, uint64_t virtual_addr) {
+    uint64_t *pml4;
+    if (pml4_phys == 0) 
         pml4 = VMM::get_pml4();
+    else
+        pml4 = reinterpret_cast<uint64_t*>(reinterpret_cast<uint64_t>(pml4_phys) + l_hhdm_offset);
 
     uint64_t phys = clear_pte_and_get_phys(pml4, virtual_addr);
     if (phys != 0)
@@ -194,8 +201,7 @@ uint64_t VMM::create_address_space() {
     return new_pml4_phys;
 }
 
-void VMM::destroy_address_space(void *root_page_table) {
-    uint64_t pml4_phys = reinterpret_cast<uint64_t>(root_page_table);
+void VMM::destroy_address_space(uint64_t pml4_phys) {
     uint64_t *pml4_virt = reinterpret_cast<uint64_t *>(pml4_phys + l_hhdm_offset);
 
     for (int i = 0; i < 256; i++) {
@@ -285,10 +291,11 @@ bool VMM::validate_userland_memory(void *address, size_t length, bool require_wr
     return true;
 }
 
-uint64_t VMM::get_physical_address(uint64_t *pml4, void *addr) {
-    if (pml4 == nullptr || addr == nullptr)
-        return 0;
+uint64_t VMM::get_physical_address(uint64_t pml4_phys, void *addr) {
+    if (addr == nullptr)
+        return 0;    
 
+    uint64_t *pml4 = reinterpret_cast<uint64_t*>(reinterpret_cast<uint64_t>(pml4_phys) + l_hhdm_offset);
     uint64_t virtual_addr = reinterpret_cast<uint64_t>(addr);
     struct page_indices idx = get_indices(virtual_addr);
     uint64_t offset = virtual_addr & 0xFFF; 
@@ -306,7 +313,7 @@ uint64_t VMM::get_physical_address(uint64_t *pml4, void *addr) {
     return phys_frame + offset;
 }
 
-uint8_t *VMM::map_zeroed_page(uint64_t *pml4, uint64_t vaddr, uint64_t flags) {
+uint8_t *VMM::map_zeroed_page(uint64_t pml4_phys, uint64_t vaddr, uint64_t flags) {
     uint64_t phys = PMM::alloc_frame();
     if (phys == 0)
         return nullptr;
@@ -314,7 +321,7 @@ uint8_t *VMM::map_zeroed_page(uint64_t *pml4, uint64_t vaddr, uint64_t flags) {
     uint8_t *page = reinterpret_cast<uint8_t *>(phys + l_hhdm_offset);
     memset(page, 0, FRAME_SIZE);
 
-    if (!map_page(pml4, vaddr, phys, flags)) {
+    if (!map_page(pml4_phys, vaddr, phys, flags)) {
         PMM::free_frame(phys);
         return nullptr;
     }

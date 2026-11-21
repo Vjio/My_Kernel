@@ -69,9 +69,9 @@ static bool validate_segment(struct elf64_phdr *ph, uint64_t file_size) {
 
 // asks the VMM for a zeroed frame at vaddr
 // fills the part of it that the file covers
-static bool load_page(uint64_t *pml4, struct elf_source *src, struct elf64_phdr *ph,
+static bool load_page(uint64_t pml4_phys, struct elf_source *src, struct elf64_phdr *ph,
     uint64_t vaddr, uint64_t flags) {
-    uint8_t *page = VMM::map_zeroed_page(pml4, vaddr, flags);
+    uint8_t *page = VMM::map_zeroed_page(pml4_phys, vaddr, flags);
     if (page == nullptr)
         return false;
 
@@ -85,7 +85,7 @@ static bool load_page(uint64_t *pml4, struct elf_source *src, struct elf64_phdr 
         memory_read(src, ph->p_offset + (low - file_start), page + (low - vaddr), high - low);
 }
 
-bool load_elf(uint64_t *pml4, struct elf_source *src, uint64_t *entry) {
+bool load_elf(uint64_t pml4_phys, struct elf_source *src, uint64_t *entry) {
     struct elf64_ehdr eh;
     if (src->size < sizeof(eh) || !memory_read(src, 0, &eh, sizeof(eh))) {
         printf("elf: can't read the header\n");
@@ -127,7 +127,7 @@ bool load_elf(uint64_t *pml4, struct elf_source *src, uint64_t *entry) {
         // no NX support yet, so every mapped page is executable whatever the flags say
         uint64_t flags = PTE_PRESENT | PTE_USER | ((ph.p_flags & PF_W) ? PTE_READ_WRITE : 0);
         for (uint64_t vaddr = start; vaddr < end; vaddr += FRAME_SIZE) {
-            if (!load_page(pml4, src, &ph, vaddr, flags)) {
+            if (!load_page(pml4_phys, src, &ph, vaddr, flags)) {
                 printf("elf: failed loading the page at %lx\n", vaddr);
                 return false;
             }

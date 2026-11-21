@@ -19,7 +19,7 @@ void heap_init(uint64_t hhdm_offset, struct process *proc) {
     // heap_init runs in kernel land, thus we can just call VMM and
     // not go through the lengthier process of a syscall
     if (proc->is_kernel_process) {
-        if (!VMM::map_pages(nullptr, KERNEL_HEAP_BASE, INIT_SIZE / FRAME_SIZE, PTE_PRESENT | PTE_READ_WRITE)) {
+        if (!VMM::map_pages(0, KERNEL_HEAP_BASE, INIT_SIZE / FRAME_SIZE, PTE_PRESENT | PTE_READ_WRITE)) {
             // i cant think of any reason this should happen
             printf("thread heap init failed!\n");
             while(true) {;}
@@ -71,7 +71,7 @@ static void expand_heap(struct heap_node *last_node, size_t requested_size, bool
 
     uint64_t old_heap_end = heap_end;
 
-    if (!VMM::map_pages(nullptr, heap_end, pages_to_alloc, PTE_PRESENT | PTE_READ_WRITE)) {
+    if (!VMM::map_pages(0, heap_end, pages_to_alloc, PTE_PRESENT | PTE_READ_WRITE)) {
         // TODO: handle running out of memory gracefully
         printf("heap expansion failed!\n");
         while(true) {;}

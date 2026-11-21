@@ -276,8 +276,7 @@ struct brk_ret brk(size_t length) {
         flags &= ~PTE_USER;
     }
 
-    if (!VMM::map_pages(reinterpret_cast<uint64_t *>(proc->root_page_table), proc->heap_end, 
-        aligned_len / FRAME_SIZE, flags)) {
+    if (!VMM::map_pages(proc->phys_page_table, proc->heap_end, aligned_len / FRAME_SIZE, flags)) {
         // TODO: update this once running out of memory is handled gracefully
         release(&proc->lock);
         return { nullptr, 0 };
