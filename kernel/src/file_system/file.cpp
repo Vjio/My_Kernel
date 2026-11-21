@@ -1,9 +1,8 @@
 #include "file.hpp"
-#include "../bitmap.hpp"
-#include "../string.hpp"
+#include "bitmap.hpp"
+#include "string.hpp"
 #include "../memory/heap.hpp"
-#include "../memory/memory.hpp"
-#include "../string.hpp"
+#include "memory.hpp"
 
 FileSystem::FileSystem(struct superblock *superblock, Drive *drive)
     : superblock(superblock), drive(drive), inode_bitmap(nullptr), data_bitmap(nullptr)  {

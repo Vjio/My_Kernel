@@ -1,7 +1,7 @@
 #pragma once
 #include <cstdint>
 #include <cstddef>
-#include "../locking/lock.h"
+#include "spinlock.h"
 #include "../stdio.hpp"
 #include "drive.hpp"
 #include "vsfs_layout.hpp"

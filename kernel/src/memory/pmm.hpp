@@ -2,7 +2,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <limine.h>
-#include "../locking/lock.h"
+#include "spinlock.h"
 
 #ifndef FRAME_SIZE
 #define FRAME_SIZE (4 * 1024)

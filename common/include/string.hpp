@@ -1,7 +1,7 @@
 #pragma once
 #include <cstdint>
 #include "stddef.h"
-#include "./memory/memory.hpp"
+#include "memory.hpp"
 
 // compares two strings
 int strncmp(const char *s1, const char *s2, size_t n);

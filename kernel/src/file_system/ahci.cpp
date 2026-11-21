@@ -2,7 +2,7 @@
 #include "drive.hpp"
 #include "sata.hpp"
 #include "stdio.hpp"
-#include "../memory/memory.hpp"
+#include "memory.hpp"
 #include "../memory/pmm.hpp"
 
 #define HBA_PxCMD_ST            0x0001

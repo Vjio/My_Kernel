@@ -1,6 +1,6 @@
 #include "pmm.hpp"
 #include "../stdio.hpp"
-#include "../bitmap.hpp"
+#include "bitmap.hpp"
 
 #define FRAME_USED      1
 #define FRAME_UNUSED    0

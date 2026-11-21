@@ -1,6 +1,6 @@
 #include "sata.hpp"
 #include "../stdio.hpp"
-#include "../memory/memory.hpp"
+#include "memory.hpp"
 
 int SATADrive::find_cmd_slot() {
     for (int i = 0; i < 32; i++)

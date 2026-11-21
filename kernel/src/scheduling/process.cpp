@@ -1,6 +1,6 @@
 #include "process.hpp"
 #include "memory/heap.hpp"
-#include "memory/memory.hpp"
+#include "memory.hpp"
 #include "memory/vmm.hpp"
 #include "memory/pmm.hpp"
 #include "scheduler.hpp"
@@ -8,7 +8,7 @@
 #include "gdt.hpp"
 #include "interrupts/tss.hpp"
 #include "../stdio.hpp"
-#include "../userland/elf_loader.hpp"
+#include "../elf/elf_loader.hpp"
 
 size_t next_free_pid = 0;
 extern struct process kernel_process;

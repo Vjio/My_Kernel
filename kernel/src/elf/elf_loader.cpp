@@ -2,7 +2,7 @@
 #include "elf.hpp"
 #include "../memory/vmm.hpp"
 #include "../memory/pmm.hpp"
-#include "../memory/memory.hpp"
+#include "memory.hpp"
 #include "../stdio.hpp"
 #include "../scheduling/process.hpp"
 

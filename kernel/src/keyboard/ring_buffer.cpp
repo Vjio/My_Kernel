@@ -1,6 +1,6 @@
 #include "ring_buffer.hpp"
 #include "../memory/heap.hpp"
-#include "../memory/memory.hpp"
+#include "memory.hpp"
 
 // NOTE: this ring buffer is currently designed to only work with 1 producer and
 // 1 consumer, with no locks

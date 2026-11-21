@@ -14,7 +14,7 @@
 #include "memory/pmm.hpp"
 #include "memory/vmm.hpp"
 #include "memory/heap.hpp"
-#include "memory/memory.hpp"
+#include "memory.hpp"
 #include "scheduling/scheduler.hpp"
 #include "operators.hpp"
 #include "scheduling/process.hpp"
@@ -23,7 +23,7 @@
 #include "file_system/drive.hpp"
 #include "file_system/sata.hpp"
 #include "file_system/file.hpp"
-#include "userland/elf_loader.hpp"
+#include "elf/elf_loader.hpp"
 #include "keyboard/keyboard_driver.hpp"
 
 // Set the base revision to 6, this is recommended as this is the latest
@@ -73,14 +73,14 @@ volatile struct limine_memmap_request memmap_request = {
     .response = nullptr
 };
 
-__attribute__((used, section(".limine_requests")))
-static volatile struct limine_module_request module_request = {
-    .id = LIMINE_MODULE_REQUEST_ID,
-    .revision = 0,
-    .response = nullptr,
-    .internal_module_count = 0,
-    .internal_modules = nullptr
-};
+// __attribute__((used, section(".limine_requests")))
+// static volatile struct limine_module_request module_request = {
+//     .id = LIMINE_MODULE_REQUEST_ID,
+//     .revision = 0,
+//     .response = nullptr,
+//     .internal_module_count = 0,
+//     .internal_modules = nullptr
+// };
 
 }
 
@@ -263,8 +263,6 @@ extern "C" void kmain() {
     PMM::init_PMM(memmap_request.response, hhdm_request.response->offset);
     VMM::init(hhdm_request.response->offset);
 
-    g_keyboard_driver = new KeyboardDriver();
-
     populate_kernel_process_struct(&kernel_process);
     heap_init(hhdm_request.response->offset, &kernel_process);
 
@@ -272,6 +270,8 @@ extern "C" void kmain() {
         printf("APIC setup failed!\n");
         hcf();
     }
+
+    g_keyboard_driver = new KeyboardDriver();
 
     inb(0x60);
 

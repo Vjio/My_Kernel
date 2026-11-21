@@ -2,7 +2,7 @@
 #include <cstdint>
 #include <cstddef>
 #include "ahci.hpp"
-#include "../locking/lock.h"
+#include "spinlock.h"
 #include "../interrupts/idt.hpp"
 #include "../scheduling/scheduler.hpp"
 #include "../memory/pmm.hpp"

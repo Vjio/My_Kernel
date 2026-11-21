@@ -95,7 +95,7 @@ void *userland::malloc(size_t size) {
         heap_start->size = INIT_SIZE - sizeof(struct heap_node);
         release(&heap_lock);
     }
-    
+
     acquire(&heap_lock);
     // find first block in heap with at least size space available
     struct heap_node *temp = heap_start;

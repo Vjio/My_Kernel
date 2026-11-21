@@ -1,7 +1,7 @@
 #pragma once
 #include "../interrupts/idt.hpp"
 #include <cstddef>
-#include "../locking/lock.h"
+#include "spinlock.h"
 #include "../file_system/vsfs_layout.hpp"
 #include "../file_system/file.hpp"
 
