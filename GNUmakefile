@@ -28,6 +28,19 @@ run: run-$(ARCH)
 .PHONY: run-hdd
 run-hdd: run-hdd-$(ARCH)
 
+.PHONY: debug
+debug: QEMUFLAGS := -S $(QEMUFLAGS)
+debug: run-$(ARCH)
+
+.PHONY: gdb
+gdb:
+	gdb kernel/bin-$(ARCH)/kernel \
+		-ex "set architecture i386:x86-64" \
+		-ex "set kernel-vmmap monitor" \
+		-ex "target remote :1234" \
+		-ex "hbreak kmain" \
+		-ex "continue"
+
 disk.img:
 	dd if=/dev/zero of=$@ bs=1M count=64
 
@@ -42,6 +55,7 @@ run-x86_64: edk2-ovmf-bins $(IMAGE_NAME).iso disk.img
 		-drive file=disk.img,format=raw,if=none,id=my_harddisk \
 		-device ahci,id=ahci \
 		-device ide-hd,drive=my_harddisk,bus=ahci.0 \
+		-s \
 		$(QEMUFLAGS)
 
 .PHONY: run-hdd-x86_64
@@ -172,6 +186,7 @@ $(IMAGE_NAME).iso: limine-binary/limine kernel
 	cp -v kernel/bin-$(ARCH)/kernel iso_root/boot/
 	mkdir -p iso_root/boot/limine
 	cp -v limine.conf iso_root/boot/limine/
+# 	cp -v userland/hello.elf iso_root/boot/
 	mkdir -p iso_root/EFI/BOOT
 ifeq ($(ARCH),x86_64)
 	cp -v limine-binary/limine-bios.sys limine-binary/limine-bios-cd.bin limine-binary/limine-uefi-cd.bin iso_root/boot/limine/
