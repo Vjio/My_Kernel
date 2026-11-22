@@ -2,6 +2,7 @@
 #include "scheduling/process.hpp"
 #include "memory/heap.hpp"
 #include "stdio.hpp"
+#include "../scheduling/scheduler.hpp"
 
 static void echo_str(struct tty *tty, const char *s) {
     while (*s)
@@ -21,8 +22,12 @@ static void commit_line(struct tty *tty, size_t len) {
         }
     }
 
+    struct thread *thread = tty->waiting_thread;
+    tty->waiting_thread = nullptr;
     release(&tty->lock);
-    // TODO: wake the readers sleeping in read(0)
+
+    if (thread != nullptr)
+        thread->take_thread_out_of_waiting();
 }
 
 void tty_input_char(struct tty *tty, char c) {
@@ -55,8 +60,12 @@ void tty_input_char(struct tty *tty, char c) {
                 // end of file: the next read returns 0
                 acquire(&tty->lock);
                 tty->eof = true;
+                struct thread *thread = tty->waiting_thread;
+                tty->waiting_thread = nullptr;
                 release(&tty->lock);
-                // TODO: wake the readers sleeping in read(0)
+                
+                if (thread)
+                    thread->take_thread_out_of_waiting();
             } else {
                 // hand over what was typed, without a newline
                 commit_line(tty, tty->line_len);
@@ -103,6 +112,50 @@ static void tty_routine(void *arg) {
     for (;;) {
         tty->keyboard_device->keyboard_get_event(event);
         tty_handle_event(tty, event);
+    }
+}
+
+long tty_read(struct tty *tty, char *buf, int n) {
+    if(tty == nullptr || buf == nullptr)
+        return -1;
+    
+    if (n == 0)
+        return 0;
+
+    size_t read_bytes = 0;
+    acquire(&tty->lock);
+    while (true) {
+        if (tty->ready_len > 0) {
+            while (read_bytes < n & tty->ready_len > 0) {
+                char c = tty->ready[tty->ready_head];
+                tty->ready_head = (tty->ready_head + 1) % TTY_READY_MAX;
+                tty->ready_len--;
+
+                buf[++read_bytes] = c;
+                if (c == '\n')
+                    break;
+            }
+            release(&tty->lock);
+            return read_bytes;
+        }
+
+        if (tty->eof) {
+            tty->eof = false;
+            release(&tty->lock);
+            return 0;
+        }
+
+        struct thread *thread = Scheduler::get_current_scheduler()->get_running_thread();
+        if (tty->waiting_thread != nullptr & tty->waiting_thread != thread) {
+            // TODO: add support for multiple threads to wait to read
+            release(&tty->lock);
+            return -1;
+        }
+
+        tty->waiting_thread = thread;
+        thread->status = WAITING;
+        release(&tty->lock);
+        thread->wait_until_taken_out_of_waiting();
     }
 }
 

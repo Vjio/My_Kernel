@@ -7,9 +7,12 @@
 #include "../file_system/file.hpp"
 #include "../file_system/vsfs_layout.hpp"
 #include "../elf/elf_loader.hpp"
+#include "../keyboard/tty.hpp"
 
 #define AT_REMOVEDIR    0x200
 #define AT_FDCWD        (-100)
+
+extern struct tty *g_console_tty;
 
 // copies a NUL terminated string from userspace into dst
 // returns the length of the string plus the NULL character
@@ -167,9 +170,9 @@ void sleep(uint64_t ticks) {
     caller->thread_sleep(ticks);
 }
 
-uint64_t write(int fd, char *buf, size_t count) {
+long write(int fd, char *buf, size_t count) {
     if (!VMM::validate_userland_memory(buf, count, false))
-        return static_cast<uint64_t>(-1);
+        return -1;
 
     if (fd < 0 || fd >= MAX_FILE_FD)
         return -1;
@@ -194,7 +197,7 @@ uint64_t write(int fd, char *buf, size_t count) {
     struct file *file = running_process->fds[fd];
 
     if (!file || file->writable == false)
-        return static_cast<uint64_t>(-1);
+        return -1;
 
     uint64_t written = 0;
     acquire(&file->lock);
@@ -212,22 +215,20 @@ uint64_t write(int fd, char *buf, size_t count) {
     return written;
 }
 
-uint64_t read(int fd, char *buf, size_t count) {
+long read(int fd, char *buf, size_t count) {
     if (!VMM::validate_userland_memory(buf, count, true))
-        return static_cast<uint64_t>(-1);
+        return -1;
 
     if (fd < 0 || fd >= MAX_FILE_FD)
         return -1;
 
-    // stds are not yet implemented so there's nothing to read
-    if (fd == STDOUT || fd == STDERR || fd == STDIN) {
-
-        // two threads tring to write at the same time will currently lead to jumbled output
-        // since i chose to reenable interrupts in this syscall (since the user can just
-        // ask to print 1 billion characters and that would freeze the system if interrupts are still masked)
-        // TODO: fix by adding a lock
-        
+    // these stds are not yet implemented so there's nothing to read
+    if (fd == STDOUT || fd == STDERR) {
         return count;
+    }
+
+    if (fd == STDIN) {
+        return tty_read(g_console_tty, buf, count);
     }
 
     struct thread *running_thread = Scheduler::get_current_scheduler()->get_running_thread();
@@ -236,7 +237,7 @@ uint64_t read(int fd, char *buf, size_t count) {
     struct file *file = running_process->fds[fd];
 
     if (!file || file->readable == false)
-        return static_cast<uint64_t>(-1);
+        return -1;
 
     uint64_t read = 0;
     acquire(&file->lock);

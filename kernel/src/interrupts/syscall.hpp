@@ -48,8 +48,10 @@ void sleep(uint64_t ticks);
 struct brk_ret brk(size_t length);
 
 // fd will be ignored for now since system can only write to console
-uint64_t write(int fd, char *buf, size_t count);
-uint64_t read(int fd, char *buf, size_t count);
+// -1 on failure
+long write(int fd, char *buf, size_t count);
+// -1 on failure
+long read(int fd, char *buf, size_t count);
 // returns fd on success
 // -1 on failure
 int open(char *path, int flags);
