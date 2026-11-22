@@ -116,8 +116,9 @@ extern "C" void exception_handler(exception_frame* frame) {
 extern "C" void irq_handler(interrupt_frame *frame) {
     int irq = frame->int_no - SOFTWARE_EXCEPTION_NR;
 
-    if (irq != 0)
-        printf("received irq %d\n", irq);
+    // useful for debugging
+    // if (irq != 0)
+    //     printf("received irq %d\n", irq);
     if (irq == 0) { // timer interrupt
         Scheduler::get_current_scheduler()->schedule(frame);
     }

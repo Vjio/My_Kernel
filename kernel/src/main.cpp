@@ -25,6 +25,7 @@
 #include "file_system/file.hpp"
 #include "elf/elf_loader.hpp"
 #include "keyboard/keyboard_driver.hpp"
+#include "keyboard/tty.hpp"
 
 // Set the base revision to 6, this is recommended as this is the latest
 // base revision described by the Limine boot protocol specification.
@@ -139,6 +140,7 @@ struct flanterm_context *ft_ctx = nullptr;
 struct process kernel_process;
 
 KeyboardDriver *g_keyboard_driver = nullptr;
+struct tty *g_console_tty = nullptr;
 
 // END GLOBALS
 
@@ -286,6 +288,8 @@ extern "C" void kmain() {
     // inits scheduler per core singleton
     Scheduler::get_current_scheduler();
 
+    g_console_tty = tty_init(g_keyboard_driver, 8);
+
     // create_user_test_process();
     // Scheduler::get_current_scheduler()->get_running_thread()->thread_sleep(1000);
 
@@ -309,12 +313,11 @@ extern "C" void kmain() {
     // TODO: once stdin, stdout etc are added to all programs
     // add it to kernel program too
 
-    // struct elf_memory_image img;
-    // img.base = reinterpret_cast<const uint8_t *>(module_request.response->modules[0]->address);
-    // img.size = module_request.response->modules[0]->size;
+    // struct elf_source src;
+    // src.ctx = reinterpret_cast<void *>(module_request.response->modules[0]->address);
+    // src.size = module_request.response->modules[0]->size;
 
-    // struct elf_source source = elf_source_from_memory(&img);
-    // create_user_process("proc", &source, nullptr);
+    // create_user_process("proc", &src, nullptr);
 
     // We're done, just hang...
     // kernel_thread->base_level = 1;
