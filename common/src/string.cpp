@@ -33,3 +33,34 @@ const char *strstr(const char *haystack, const char *needle) {
 
     return nullptr;
 }
+
+int strcmp(const char *s1, const char *s2) {
+    unsigned char u1, u2;
+
+    do {
+        u1 = (unsigned char) *s1++;
+        u2 = (unsigned char) *s2++;
+        if (u1 != u2)
+            return u1 - u2;
+    } while (u1 != '\0');
+
+    return 0;
+}
+
+const char *strchr(const char *s, int c) {
+    const char ch = static_cast<char>(c);
+
+    for (;; ++s) {
+        if (*s == ch)
+            return s;
+        if (*s == '\0')
+            return nullptr;
+    }
+}
+
+char *strcpy(char *dest, const char *src) {
+    char *d = dest;
+    while ((*d++ = *src++) != '\0')
+        ;
+    return dest;
+}
