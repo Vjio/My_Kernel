@@ -4,6 +4,7 @@
 #include <atomic>
 #include "keyboard.hpp"
 #include "scheduling/process.hpp"
+#include "../lock/spinlock_irq.hpp"
 
 #define RB_DEFAULT_CAP  64
 
@@ -13,12 +14,13 @@ struct ring_buffer {
     size_t read_pos;
     size_t write_pos;
 
-    // current stored events. this is the only shared variable
+    // current stored events
     std::atomic<size_t> len;
     // maximum events that can be stored
     size_t cap;
 
     struct thread *waiting_thread;
+    struct spinlock spinlock;
 };
 
 // returns NULL if init fails

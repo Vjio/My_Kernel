@@ -26,6 +26,7 @@ struct ring_buffer *ring_buffer_init(size_t cap) {
     }
 
     rb->cap = cap;
+    rb->spinlock.locked = false;
     return rb;
 }
 
@@ -45,11 +46,13 @@ size_t ring_buffer_enqueue(struct ring_buffer *rb, struct key_event *data, size_
     }
     rb->len.fetch_add(nr, std::memory_order_release);
 
-    if (rb->waiting_thread != nullptr) {
-        struct thread *thread = rb->waiting_thread;
-        rb->waiting_thread = nullptr;
+    uint64_t flags = spin_lock_irq_save(&rb->spinlock);
+    struct thread *thread = rb->waiting_thread;
+    rb->waiting_thread = nullptr;
+    spin_lock_irq_restore(&rb->spinlock, flags);
+
+    if (thread != nullptr)
         thread->take_thread_out_of_waiting();
-    }
 
     return nr;
 }

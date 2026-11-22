@@ -150,6 +150,7 @@ irq_common_stub:
 
     ; return to whatever code was running before the interrupt fired
     iretq
+
 syscall_stub:
     push qword 0    ; dummy error code
     push qword 0x80 ; vector number

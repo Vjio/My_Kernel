@@ -91,7 +91,7 @@ extern "C" void exception_handler(exception_frame* frame) {
         serial_print("\n");
         for (;;) __asm__ volatile ("hlt");
     }
-    
+
     if (frame->int_no == 14) {
         uint64_t cr2;
         __asm__ volatile("mov %%cr2, %0" : "=r"(cr2));
@@ -125,7 +125,6 @@ extern "C" void irq_handler(interrupt_frame *frame) {
     else if (irq == 1) { // keyboard
         uint8_t scancode = inb(0x60);
         handle_scancode(scancode);
-        printf("Keyboard interrupt! scancode=0x%x\n", scancode);
     }
 
     else if (irq == Drive::interrupt_line) {
